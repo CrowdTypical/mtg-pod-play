@@ -31,6 +31,7 @@ export async function signUp(
     uid: user.uid,
     email: user.email,
     displayName,
+    nickname: null, // User can add later; null is Firestore-safe
     createdAt: null, // serverTimestamp resolves server-side
   };
   await setDoc(doc(db, 'users', user.uid), {
@@ -89,6 +90,7 @@ export async function ensureUserProfile(user: User): Promise<UserProfile> {
     uid: user.uid,
     email: user.email,
     displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Player',
+    nickname: null,
     createdAt: null,
   };
   await setDoc(doc(db, 'users', user.uid), {

@@ -8,7 +8,7 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string;
-  nickname?: string; // Optional; falls back to displayName
+  nickname: string | null; // Optional; falls back to displayName. null for Firestore.
   createdAt: Timestamp | null;
 
   // Aggregate stats (computed from matchHistory subcollection)
@@ -18,7 +18,9 @@ export interface UserProfile {
 }
 
 /** The name shown in lobbies — nickname if set, else displayName. */
-export function displayName(user: Pick<UserProfile, 'displayName' | 'nickname'>): string {
+export function displayName(
+  user: Pick<UserProfile, 'displayName' | 'nickname'>,
+): string {
   return user.nickname?.trim() || user.displayName;
 }
 
@@ -95,7 +97,7 @@ export type SessionStatus = 'lobby' | 'in_progress' | 'completed';
 export interface SessionPlayer {
   uid: string;
   displayName: string;
-  nickname?: string;
+  nickname: string | null; // null for Firestore compatibility
   isHost: boolean;
   isReady: boolean;
   joinedAt: Timestamp | null;
@@ -172,7 +174,7 @@ export interface MatchHistoryEntry {
   placement: number | null;
   playerCount: number;
   commanderName: string;
-  commanderId?: string;
+  commanderId: string | null;
   date: Timestamp | null;
-  deckName?: string;
+  deckName: string | null;
 }

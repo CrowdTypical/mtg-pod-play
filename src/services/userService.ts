@@ -31,8 +31,8 @@ export async function recordMatchToProfile(
     placement: player.placement ?? null,
     playerCount,
     commanderName: player.commander?.name ?? 'Unknown',
-    commanderId: player.commander?.scryfallId,
-    deckName: undefined,
+    commanderId: player.commander?.scryfallId ?? null,
+    deckName: null,
   };
   await addDoc(collection(db, 'users', uid, 'matchHistory'), {
     ...entry,

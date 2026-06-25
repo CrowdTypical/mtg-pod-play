@@ -59,7 +59,7 @@ async function generateUniqueCode(): Promise<string> {
 export interface CreateSessionInput {
   hostUid: string;
   hostDisplayName: string;
-  hostNickname?: string;
+  hostNickname?: string | null;
   maxPlayers: number; // 2–7
   startingLife?: number;
 }
@@ -106,7 +106,7 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
 export interface JoinSessionInput {
   uid: string;
   displayName: string;
-  nickname?: string;
+  nickname?: string | null;
   isHost?: boolean;
   startingLife?: number;
 }
@@ -116,7 +116,7 @@ export async function joinSession(sessionId: string, input: JoinSessionInput): P
   const player: SessionPlayer = {
     uid: input.uid,
     displayName: input.displayName,
-    nickname: input.nickname,
+    nickname: input.nickname ?? null,
     isHost: input.isHost ?? false,
     isReady: false,
     joinedAt: null,
