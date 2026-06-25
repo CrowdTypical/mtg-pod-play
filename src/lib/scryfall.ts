@@ -172,22 +172,23 @@ export async function enrichDecklist(entries: DecklistEntry[]): Promise<Decklist
  * Fetch a decklist from an Archidekt deck URL.
  * Archidekt provides a public JSON API: https://archidekt.com/api/decks/{id}/
  * The deck ID is the numeric portion of the URL.
+ *
+ * Uses a proxy (/api/archidekt) to avoid CORS issues:
+ *  - Dev: Vite proxy (vite.config.ts)
+ *  - Prod: Vercel rewrite (vercel.json)
  */
 export async function importFromArchidekt(url: string): Promise<Decklist> {
   const idMatch = url.match(/archidekt\.com\/decks\/(\d+)/);
   if (!idMatch) throw new Error('Invalid Archidekt URL. Expected archidekt.com/decks/{id}');
   const deckId = idMatch[1];
 
-  // Use the relative proxy path (/api/archidekt) to avoid CORS issues.
-  // In dev, Vite proxies this to https://archidekt.com/api.
-  // In prod, Vercel rewrites this to https://archidekt.com/api.
   const apiUrl = `/api/archidekt/decks/${deckId}/`;
   let res: Response;
   try {
     res = await fetch(apiUrl, {
       headers: { Accept: 'application/json' },
     });
-  } catch (networkErr) {
+  } catch {
     throw new Error(
       'Network error contacting Archidekt. The site may be down or blocking requests.',
     );
@@ -200,21 +201,27 @@ export async function importFromArchidekt(url: string): Promise<Decklist> {
   const data = (await res.json()) as ArchidektDeck;
 
   const entries: Decklist = [];
-  for (const card of data.cards) {
-    // Include cards in the Main board, or cards with no board specified.
-    const board = card.card?.board;
-    if (board && board !== 'Main' && board !== 'Commander') continue;
+  for (const cardEntry of data.cards) {
+    // The 'categories' array tells us which board the card is in.
+    // e.g. ["Creature"], ["Commander"], ["Maybeboard"], ["Sideboard"]
+    const cats = cardEntry.categories ?? [];
+    const catLower = cats.map((c) => c.toLowerCase());
+
+    // Skip sideboard and maybeboard cards.
+    if (catLower.includes('maybeboard') || catLower.includes('sideboard')) continue;
+
+    const isCommander = catLower.includes('commander');
+    const card = cardEntry.card;
+
     entries.push({
-      count: card.quantity,
-      name: card.card.name,
-      scryfallId: card.card.uid,
-      imageUrl: card.card.image_small ?? card.card.image_crop,
-      isCommander:
-        (board ?? '').toLowerCase() === 'commander' || !!card.card.featured,
+      count: cardEntry.quantity,
+      name: card.oracleCard?.name ?? card.name,
+      scryfallId: card.uid,
+      isCommander,
     });
   }
   if (entries.length === 0) {
-    throw new Error('No cards found in the Main board. Is the deck public?');
+    throw new Error('No cards found. Is the deck public?');
   }
   return entries;
 }
@@ -222,13 +229,17 @@ export async function importFromArchidekt(url: string): Promise<Decklist> {
 interface ArchidektDeck {
   cards: Array<{
     quantity: number;
+    categories: string[];
     card: {
       name: string;
       uid: string;
-      board?: string;
-      image_small?: string;
-      image_crop?: string;
-      featured?: boolean;
+      oracleCard?: {
+        name: string;
+        manaCost?: string;
+        cmc?: number;
+        type?: string;
+        text?: string;
+      };
     };
   }>;
 }
