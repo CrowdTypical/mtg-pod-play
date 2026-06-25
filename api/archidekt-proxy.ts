@@ -4,21 +4,31 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Serverless proxy for Archidekt API requests.
  * Avoids CORS issues by fetching server-side.
  *
- * Route: /api/archidekt/* → https://archidekt.com/api/*
- *
- * The full path is reconstructed from req.url.
+ * Client calls: /api/archidekt-proxy?path=decks/123/
+ * Proxy fetches: https://archidekt.com/api/decks/123/
  */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  // req.url will be something like "/api/archidekt/decks/123/?recursive=true"
-  // Strip "/api/archidekt" prefix to get the Archidekt API path
-  const url = req.url || '';
-  const apiPath = url.replace(/^\/api\/archidekt/, '').split('?')[0];
-  const queryString = url.includes('?') ? '?' + url.split('?')[1] : '';
+  // Handle CORS preflight
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  const targetUrl = `https://archidekt.com/api/${apiPath}${queryString}`;
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+
+  // Get the Archidekt API path from query parameter
+  const path = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!path) {
+    res.status(400).json({ error: 'Missing "path" query parameter.' });
+    return;
+  }
+
+  const targetUrl = `https://archidekt.com/api/${path}`;
 
   try {
     const response = await fetch(targetUrl, {
@@ -27,16 +37,6 @@ export default async function handler(
         'User-Agent': 'MTG-Pod-Play/1.0',
       },
     });
-
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
-    }
 
     if (!response.ok) {
       res.status(response.status).json({

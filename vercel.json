@@ -3,11 +3,12 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/archidekt-proxy.ts": {
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
-    {
-      "source": "/api/archidekt/:path*",
-      "destination": "/api/archidekt-proxy"
-    },
     {
       "source": "/((?!api).*)",
       "destination": "/"

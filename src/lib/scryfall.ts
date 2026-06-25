@@ -180,16 +180,15 @@ export interface DeckImportResult {
  * Archidekt provides a public JSON API: https://archidekt.com/api/decks/{id}/
  * The deck ID is the numeric portion of the URL.
  *
- * Uses a proxy (/api/archidekt) to avoid CORS issues:
- *  - Dev: Vite proxy (vite.config.ts)
- *  - Prod: Vercel rewrite (vercel.json)
+ * Uses a serverless proxy (/api/archidekt-proxy) to avoid CORS issues.
+ * The path is passed as a query parameter: ?path=decks/{id}/
  */
 export async function importFromArchidekt(url: string): Promise<DeckImportResult> {
   const idMatch = url.match(/archidekt\.com\/decks\/(\d+)/);
   if (!idMatch) throw new Error('Invalid Archidekt URL. Expected archidekt.com/decks/{id}');
   const deckId = idMatch[1];
 
-  const apiUrl = `/api/archidekt/decks/${deckId}/`;
+  const apiUrl = `/api/archidekt-proxy?path=decks/${deckId}/`;
   let res: Response;
   try {
     res = await fetch(apiUrl, {
@@ -197,7 +196,7 @@ export async function importFromArchidekt(url: string): Promise<DeckImportResult
     });
   } catch {
     throw new Error(
-      'Network error contacting Archidekt. The site may be down or blocking requests.',
+      'Network error contacting Archidekt proxy. The service may be down.',
     );
   }
   if (!res.ok) {

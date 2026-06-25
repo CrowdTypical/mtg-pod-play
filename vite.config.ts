@@ -4,7 +4,41 @@ import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'archidekt-dev-proxy',
+      configureServer(server) {
+        server.middlewares.use('/api/archidekt-proxy', async (req, res) => {
+          const url = new URL(req.url || '', 'http://localhost');
+          const path = url.searchParams.get('path');
+          if (!path) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Missing "path" query parameter.' }));
+            return;
+          }
+          try {
+            const target = `https://archidekt.com/api/${path}`;
+            const response = await fetch(target, {
+              headers: {
+                Accept: 'application/json',
+                'User-Agent': 'MTG-Pod-Play/1.0 (dev)',
+              },
+            });
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.statusCode = response.status;
+            res.end(await response.text());
+          } catch {
+            res.statusCode = 502;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Failed to reach Archidekt.' }));
+          }
+        });
+      },
+    },
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -13,14 +47,6 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    proxy: {
-      // Proxy Archidekt API requests to avoid CORS issues in dev.
-      '/api/archidekt': {
-        target: 'https://archidekt.com/api',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/archidekt/, ''),
-      },
-    },
   },
   build: {
     chunkSizeWarningLimit: 700,
