@@ -105,6 +105,8 @@ export interface SessionPlayer {
   // Pre-game setup
   commander?: CommanderInfo | null;
   decklist?: Decklist | null;
+  deckName?: string | null;
+  deckSourceUrl?: string | null;
 
   // Dice roll for turn order
   diceRoll?: number | null;
@@ -162,6 +164,9 @@ export interface Session {
   createdAt: Timestamp | null;
   startedAt?: Timestamp | null;
   endedAt?: Timestamp | null;
+  /** Incremented by host to signal all players should clear their diceRoll.
+   *  Clients watch this counter and reset locally when it changes. */
+  diceResetCount?: number;
 }
 
 /* ============================================================

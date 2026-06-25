@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 
 import { useAuth } from '@/context/AuthContext';
 import {
+  clearMyDiceRoll,
   computeTurnOrder,
+  resetDiceRolls,
   rollDice,
   setPlayerCommander,
   setPlayerDecklist,
@@ -23,25 +26,16 @@ import { displayName as getDisplayName } from '@/types';
 
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [session, setSession] = useState<Session | null>(null);
   const [players, setPlayers] = useState<SessionPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const lastResetCount = useRef<number | null>(null);
 
-  // If the game moves to in_progress, switch to match view
-  useEffect(() => {
-    if (session?.status === 'in_progress' && sessionId) {
-      navigate(`/match/${sessionId}`, { replace: true });
-    }
-    if (session?.status === 'completed' && sessionId) {
-      navigate(`/match/${sessionId}`, { replace: true });
-    }
-  }, [session?.status, sessionId, navigate]);
-
-  // Real-time subscriptions
+  // Real-time subscriptions.
   useEffect(() => {
     if (!sessionId) return;
     const unsub1 = subscribeToSession(sessionId, setSession);
@@ -52,6 +46,22 @@ export default function LobbyPage() {
       unsub2();
     };
   }, [sessionId]);
+
+  // React to host's dice-roll reset signal: when diceResetCount increments,
+  // each client clears their own diceRoll locally (avoids cross-player writes).
+  // On first observation, just store the value — don't trigger a clear.
+  useEffect(() => {
+    if (!sessionId || !user || !session) return;
+    const currentCount = session.diceResetCount ?? 0;
+    if (lastResetCount.current === null) {
+      lastResetCount.current = currentCount;
+      return;
+    }
+    if (currentCount > lastResetCount.current) {
+      lastResetCount.current = currentCount;
+      clearMyDiceRoll(sessionId, user.uid).catch(() => {});
+    }
+  }, [session?.diceResetCount, sessionId, user, session]);
 
   if (loading) {
     return (
@@ -76,13 +86,27 @@ export default function LobbyPage() {
   const me = players.find((p) => p.uid === user.uid);
   const isHost = user.uid === session.hostUid;
   const joinUrl = `${window.location.origin}/join/${session.code}`;
+
+  // Dynamic ordering: players who rolled are sorted highest→lowest (ties
+  // alphabetical), then players who haven't rolled appear at the bottom.
   const sortedPlayers = [...players].sort((a, b) => {
+    const aRolled = a.diceRoll != null;
+    const bRolled = b.diceRoll != null;
+    if (aRolled && bRolled) {
+      const diff = (b.diceRoll ?? 0) - (a.diceRoll ?? 0);
+      if (diff !== 0) return diff;
+      return getDisplayName(a).localeCompare(getDisplayName(b));
+    }
+    if (aRolled && !bRolled) return -1;
+    if (!aRolled && bRolled) return 1;
     if (a.isHost) return -1;
     if (b.isHost) return 1;
     return getDisplayName(a).localeCompare(getDisplayName(b));
   });
+
   const allReady = players.length >= 2 && players.every((p) => p.isReady);
   const turnOrder = computeTurnOrder(players);
+  const anyRolled = players.some((p) => p.diceRoll != null);
 
   async function handleCopyCode() {
     await navigator.clipboard.writeText(session!.code);
@@ -93,10 +117,28 @@ export default function LobbyPage() {
 
   async function handleStart() {
     if (!sessionId) return;
+    setError('');
     try {
       await startGame(sessionId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start game.');
+    }
+  }
+
+  async function handleResetRolls() {
+    if (!sessionId) return;
+    setError('');
+    setResetting(true);
+    try {
+      await resetDiceRolls(sessionId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reset dice rolls.';
+      setError(msg.includes('permission')
+        ? 'Permission denied — make sure Firestore rules are deployed: firebase deploy --only firestore:rules'
+        : msg
+      );
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -131,51 +173,51 @@ export default function LobbyPage() {
       </div>
 
       <div className="grid grid-2">
-        {/* Player list */}
+        {/* Player list — dynamically ordered by dice roll, animated */}
         <div>
-          <h3 style={{ marginBottom: '0.75rem' }}>
-            Players ({players.length}/{session.maxPlayers})
-          </h3>
+          <div className="flex justify-between items-center mb-md">
+            <h3 style={{ margin: 0 }}>
+              Players ({players.length}/{session.maxPlayers})
+            </h3>
+            {anyRolled && (
+              <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                Sorted by roll ↓
+              </span>
+            )}
+          </div>
+          {/* framer-motion layout animations for smooth reordering */}
           <div className="flex flex-col gap-sm">
-            {sortedPlayers.map((p) => (
-              <PlayerRow key={p.uid} player={p} />
-            ))}
+            <AnimatePresence mode="popLayout">
+              {sortedPlayers.map((p, idx) => (
+                <motion.div
+                  key={p.uid}
+                  layout
+                  layoutId={`player-${p.uid}`}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{
+                    layout: { type: 'spring', stiffness: 400, damping: 35 },
+                    duration: 0.2,
+                  }}
+                >
+                  <PlayerRow player={p} rank={p.diceRoll != null ? idx + 1 : null} />
+                </motion.div>
+              ))}
+            </AnimatePresence>
             {players.length < session.maxPlayers && (
               <div className="card text-center text-muted" style={{ padding: '1rem', borderStyle: 'dashed' }}>
                 Waiting for more players to join…
               </div>
             )}
           </div>
-        </div>
 
-        {/* My setup */}
-        <div>
-          {me && (
-            <MySetupPanel
-              sessionId={sessionId!}
-              player={me}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Dice & turn order */}
-      {players.some((p) => p.diceRoll != null) && (
-        <div className="card mt-lg">
-          <h3 style={{ marginBottom: '0.75rem' }}>Dice Rolls & Turn Order</h3>
-          <div className="flex gap-md" style={{ flexWrap: 'wrap', marginBottom: '1rem' }}>
-            {sortedPlayers.map((p) => (
-              <div key={p.uid} className="text-center" style={{ minWidth: 80 }}>
-                <p style={{ fontWeight: 600, fontSize: '0.9rem' }}>{getDisplayName(p)}</p>
-                <p style={{ fontSize: '2rem', fontWeight: 800, color: p.diceRoll ? 'var(--color-accent)' : 'var(--text-muted)' }}>
-                  {p.diceRoll ?? '—'}
-                </p>
-              </div>
-            ))}
-          </div>
-          {turnOrder.length > 0 && (
-            <div>
-              <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>Turn Order:</p>
+          {/* Turn order preview */}
+          {turnOrder.length > 1 && (
+            <div className="mt-md">
+              <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                Turn Order:
+              </p>
               <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
                 {turnOrder.map((uid, i) => {
                   const p = players.find((pl) => pl.uid === uid);
@@ -189,21 +231,41 @@ export default function LobbyPage() {
             </div>
           )}
         </div>
-      )}
 
-      {/* Start button (host only) */}
+        {/* My setup */}
+        <div>
+          {me && (
+            <MySetupPanel
+              sessionId={sessionId!}
+              player={me}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Host controls: reset rolls + start game */}
       {isHost && (
         <div className="card mt-lg text-center">
+          {anyRolled && (
+            <button
+              onClick={handleResetRolls}
+              className="btn btn-outline btn-sm mb-md"
+              disabled={resetting}
+              style={{ marginBottom: '1rem' }}
+            >
+              {resetting ? 'Resetting…' : '↻ Reset All Dice Rolls'}
+            </button>
+          )}
           <button
             onClick={handleStart}
-            className="btn btn-primary btn-lg"
+            className="btn btn-primary btn-lg btn-block"
             disabled={!allReady}
           >
             {allReady ? 'Start Game' : 'Waiting for all players to be ready…'}
           </button>
           {!allReady && (
             <p className="text-muted mt-sm" style={{ fontSize: '0.85rem' }}>
-              All players must hit "Ready" and roll the dice first.
+              All players must hit "Ready" first.
             </p>
           )}
         </div>
@@ -216,20 +278,30 @@ export default function LobbyPage() {
  * Sub-components
  * -------------------------------------------------------- */
 
-function PlayerRow({ player }: { player: SessionPlayer }) {
+function PlayerRow({
+  player,
+  rank,
+}: {
+  player: SessionPlayer;
+  rank: number | null;
+}) {
   const name = getDisplayName(player);
+  const hasDeck = !!player.decklist && player.decklist.length > 0;
+
   return (
     <div className="card" style={{ padding: '0.75rem 1rem' }}>
       <div className="flex items-center gap-md">
+        {/* Commander image always on the left */}
         {player.commander?.imageUris ? (
           <img
             src={player.commander.imageUris.small}
             alt={player.commander.name}
-            style={{ width: 40, height: 56, borderRadius: 4 }}
+            style={{ width: 40, height: 56, borderRadius: 4, flexShrink: 0 }}
           />
         ) : (
-          <div style={{ width: 40, height: 56, borderRadius: 4, background: 'var(--bg-accent)' }} />
+          <div style={{ width: 40, height: 56, borderRadius: 4, background: 'var(--bg-accent)', flexShrink: 0 }} />
         )}
+
         <div className="flex-1">
           <div className="flex items-center gap-sm">
             <p style={{ fontWeight: 600 }}>{name}</p>
@@ -238,21 +310,193 @@ function PlayerRow({ player }: { player: SessionPlayer }) {
           </div>
           <p className="text-muted" style={{ fontSize: '0.85rem' }}>
             {player.commander?.name ?? 'No commander selected'}
-            {player.decklist ? ` · ${player.decklist.length} cards` : ''}
           </p>
-        </div>
-        {player.diceRoll && (
-          <div className="text-center">
-            <p className="text-muted" style={{ fontSize: '0.7rem' }}>Roll</p>
-            <p style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-accent)' }}>
-              {player.diceRoll}
+          {/* Deck name as hyperlink */}
+          {hasDeck && (
+            <p style={{ fontSize: '0.8rem', marginTop: '0.15rem' }}>
+              {player.deckSourceUrl ? (
+                <a
+                  href={player.deckSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="deck-link"
+                >
+                  📜 {player.deckName ?? `${player.decklist!.length} cards`}
+                </a>
+              ) : (
+                <span className="text-muted">📜 {player.decklist!.length} cards</span>
+              )}
             </p>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Rank and dice roll on the right side */}
+        <div className="flex items-center gap-md" style={{ flexShrink: 0 }}>
+          {player.diceRoll != null && (
+            <>
+              {rank !== null && (
+                <div className="text-center">
+                  <p className="text-muted" style={{ fontSize: '0.65rem', marginBottom: 0 }}>RANK</p>
+                  <p
+                    style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 800,
+                      color: 'var(--color-accent)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {rank}
+                  </p>
+                </div>
+              )}
+              <div className="text-center">
+                <p className="text-muted" style={{ fontSize: '0.7rem', marginBottom: 0 }}>D20</p>
+                <p
+                  style={{
+                    fontSize: '2rem',
+                    fontWeight: 800,
+                    color: 'var(--color-accent)',
+                    lineHeight: 1,
+                  }}
+                >
+                  {player.diceRoll}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
+/* ============================================================
+ * Improved Commander Selector (visual card-style picker)
+ * ============================================================ */
+
+function CommanderPicker({
+  sessionId,
+  uid,
+  currentCommander,
+}: {
+  sessionId: string;
+  uid: string;
+  currentCommander: CommanderInfo | null;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<CommanderInfo[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (!query.trim() || currentCommander) {
+      setResults([]);
+      return;
+    }
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchCommanders(query);
+        setResults(res.slice(0, 6));
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query, currentCommander]);
+
+  async function handleSelect(c: CommanderInfo) {
+    await setPlayerCommander(sessionId, uid, c);
+    setQuery('');
+    setResults([]);
+  }
+
+  async function handleClear() {
+    await setPlayerCommander(sessionId, uid, null);
+    setQuery('');
+  }
+
+  // If commander is selected, show a beautiful card-style display
+  if (currentCommander) {
+    return (
+      <div className="commander-card-display">
+        <div className="commander-card-image">
+          {currentCommander.imageUris?.normal ? (
+            <img src={currentCommander.imageUris.normal} alt={currentCommander.name} />
+          ) : (
+            <div className="commander-card-placeholder">
+              <span>No Image</span>
+            </div>
+          )}
+        </div>
+        <div className="commander-card-info">
+          <p className="commander-card-name">{currentCommander.name}</p>
+          {currentCommander.manaCost && (
+            <p className="commander-card-mana">{currentCommander.manaCost}</p>
+          )}
+          <p className="commander-card-type text-muted">{currentCommander.typeLine}</p>
+          <div className="commander-card-colors">
+            {currentCommander.colors.map((c) => (
+              <span key={c} className={`mana-pill mana-${c.toLowerCase()}`} />
+            ))}
+          </div>
+          <button onClick={handleClear} className="btn btn-outline btn-sm mt-sm">
+            Change Commander
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Search interface
+  return (
+    <div className="commander-picker">
+      <div className="commander-search-box">
+        <input
+          type="text"
+          className="form-input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search for your commander…"
+          style={{ paddingLeft: '2.25rem' }}
+        />
+        <span className="commander-search-icon">🔍</span>
+      </div>
+      {searching && <p className="form-hint">Searching…</p>}
+      {!searching && query && results.length === 0 && (
+        <p className="form-hint">No commanders found.</p>
+      )}
+      {results.length > 0 && (
+        <div className="commander-results-grid">
+          {results.map((c) => (
+            <button
+              key={c.scryfallId}
+              onClick={() => handleSelect(c)}
+              className="commander-grid-item"
+            >
+              {c.imageUris?.small ? (
+                <img src={c.imageUris.small} alt={c.name} />
+              ) : (
+                <div className="commander-grid-no-img">{c.name}</div>
+              )}
+              <div className="commander-grid-name">
+                <span style={{ fontWeight: 600 }}>{c.name}</span>
+                <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                  {c.manaCost}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * My Setup Panel
+ * ============================================================ */
 
 function MySetupPanel({
   sessionId,
@@ -262,9 +506,6 @@ function MySetupPanel({
   player: SessionPlayer;
 }) {
   const { user } = useAuth();
-  const [commanderQuery, setCommanderQuery] = useState('');
-  const [commanderResults, setCommanderResults] = useState<CommanderInfo[]>([]);
-  const [searching, setSearching] = useState(false);
   const [showDeckImport, setShowDeckImport] = useState(false);
   const [decklistText, setDecklistText] = useState('');
   const [archidektUrl, setArchidektUrl] = useState('');
@@ -274,37 +515,13 @@ function MySetupPanel({
 
   const uid = user!.uid;
 
-  useEffect(() => {
-    if (!commanderQuery.trim() || player.commander) {
-      setCommanderResults([]);
-      return;
-    }
-    setSearching(true);
-    const timer = setTimeout(async () => {
-      try {
-        const results = await searchCommanders(commanderQuery);
-        setCommanderResults(results.slice(0, 6));
-      } catch {
-        setCommanderResults([]);
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [commanderQuery, player.commander]);
-
-  async function handleSetCommander(c: CommanderInfo | null) {
-    await setPlayerCommander(sessionId, uid, c);
-    setCommanderQuery('');
-  }
-
   async function handleImportPaste() {
     if (!decklistText.trim()) return;
     setImporting(true);
     try {
       const parsed = parseDecklistText(decklistText);
       const enriched = await enrichDecklist(parsed);
-      await setPlayerDecklist(sessionId, uid, enriched);
+      await setPlayerDecklist(sessionId, uid, enriched, null, null);
       setShowDeckImport(false);
       setDecklistText('');
     } finally {
@@ -317,13 +534,17 @@ function MySetupPanel({
     setImporting(true);
     try {
       const imported = await importFromArchidekt(archidektUrl);
-      const enriched = await enrichDecklist(imported);
-      await setPlayerDecklist(sessionId, uid, enriched);
+      const enriched = await enrichDecklist(imported.decklist);
+      await setPlayerDecklist(sessionId, uid, enriched, imported.name, imported.sourceUrl);
       setShowDeckImport(false);
       setArchidektUrl('');
     } finally {
       setImporting(false);
     }
+  }
+
+  async function handleClearDeck() {
+    await setPlayerDecklist(sessionId, uid, null, null, null);
   }
 
   async function handleRoll() {
@@ -348,45 +569,14 @@ function MySetupPanel({
     <div className="card">
       <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
 
-      {/* Commander */}
+      {/* Commander — new visual picker */}
       <div className="form-group">
         <label className="form-label">Your Commander</label>
-        {player.commander ? (
-          <div className="flex items-center gap-md">
-            {player.commander.imageUris && (
-              <img src={player.commander.imageUris.small} alt="" style={{ width: 48, height: 67, borderRadius: 4 }} />
-            )}
-            <div className="flex-1">
-              <p style={{ fontWeight: 600 }}>{player.commander.name}</p>
-              <p className="text-muted" style={{ fontSize: '0.8rem' }}>{player.commander.typeLine}</p>
-            </div>
-            <button onClick={() => handleSetCommander(null)} className="btn btn-outline btn-sm">Change</button>
-          </div>
-        ) : (
-          <>
-            <input
-              type="text"
-              className="form-input"
-              value={commanderQuery}
-              onChange={(e) => setCommanderQuery(e.target.value)}
-              placeholder="Search commanders…"
-            />
-            {searching && <p className="form-hint">Searching…</p>}
-            {commanderResults.length > 0 && (
-              <div className="commander-results">
-                {commanderResults.map((c) => (
-                  <button key={c.scryfallId} onClick={() => handleSetCommander(c)} className="commander-result">
-                    {c.imageUris && <img src={c.imageUris.small} alt={c.name} />}
-                    <div>
-                      <p style={{ fontWeight: 600 }}>{c.name}</p>
-                      <p className="text-muted" style={{ fontSize: '0.8rem' }}>{c.typeLine}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        <CommanderPicker
+          sessionId={sessionId}
+          uid={uid}
+          currentCommander={player.commander ?? null}
+        />
       </div>
 
       {/* Decklist */}
@@ -394,9 +584,14 @@ function MySetupPanel({
         <label className="form-label">Your Decklist</label>
         {player.decklist ? (
           <div className="flex justify-between items-center">
-            <p>{player.decklist.length} unique cards</p>
+            <div>
+              <p>{player.decklist.length} unique cards</p>
+              {player.deckName && (
+                <p className="text-muted" style={{ fontSize: '0.8rem' }}>{player.deckName}</p>
+              )}
+            </div>
             <button
-              onClick={() => setPlayerDecklist(sessionId, uid, null)}
+              onClick={handleClearDeck}
               className="btn btn-outline btn-sm"
             >
               Remove
@@ -438,18 +633,18 @@ function MySetupPanel({
         )}
       </div>
 
-      {/* Dice roll */}
+      {/* Dice roll — single roll, no re-roll button */}
       <div className="divider" />
       <div className="form-group text-center">
         <label className="form-label">Roll for Turn Order</label>
-        {player.diceRoll ? (
+        {player.diceRoll != null ? (
           <div>
-            <p style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--color-accent)' }}>
+            <p style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--color-accent)', lineHeight: 1 }}>
               {player.diceRoll}
             </p>
-            <button onClick={handleRoll} className="btn btn-outline btn-sm" disabled={rolling}>
-              Roll Again
-            </button>
+            <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+              You rolled a {player.diceRoll}. Ask the host to reset if needed.
+            </p>
           </div>
         ) : (
           <button onClick={handleRoll} className="btn btn-accent btn-lg" disabled={rolling}>

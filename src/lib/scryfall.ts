@@ -168,6 +168,13 @@ export async function enrichDecklist(entries: DecklistEntry[]): Promise<Decklist
  * Archidekt import
  * -------------------------------------------------------- */
 
+/** Result of importing a deck from an external source. */
+export interface DeckImportResult {
+  decklist: Decklist;
+  name: string | null;
+  sourceUrl: string | null;
+}
+
 /**
  * Fetch a decklist from an Archidekt deck URL.
  * Archidekt provides a public JSON API: https://archidekt.com/api/decks/{id}/
@@ -177,7 +184,7 @@ export async function enrichDecklist(entries: DecklistEntry[]): Promise<Decklist
  *  - Dev: Vite proxy (vite.config.ts)
  *  - Prod: Vercel rewrite (vercel.json)
  */
-export async function importFromArchidekt(url: string): Promise<Decklist> {
+export async function importFromArchidekt(url: string): Promise<DeckImportResult> {
   const idMatch = url.match(/archidekt\.com\/decks\/(\d+)/);
   if (!idMatch) throw new Error('Invalid Archidekt URL. Expected archidekt.com/decks/{id}');
   const deckId = idMatch[1];
@@ -223,10 +230,15 @@ export async function importFromArchidekt(url: string): Promise<Decklist> {
   if (entries.length === 0) {
     throw new Error('No cards found. Is the deck public?');
   }
-  return entries;
+  return {
+    decklist: entries,
+    name: data.name ?? null,
+    sourceUrl: `https://archidekt.com/decks/${deckId}`,
+  };
 }
 
 interface ArchidektDeck {
+  name?: string;
   cards: Array<{
     quantity: number;
     categories: string[];

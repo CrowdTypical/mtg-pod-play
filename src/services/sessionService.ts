@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -109,6 +110,10 @@ export interface JoinSessionInput {
   nickname?: string | null;
   isHost?: boolean;
   startingLife?: number;
+  commander?: CommanderInfo | null;
+  decklist?: Decklist | null;
+  deckName?: string | null;
+  deckSourceUrl?: string | null;
 }
 
 export async function joinSession(sessionId: string, input: JoinSessionInput): Promise<void> {
@@ -120,8 +125,10 @@ export async function joinSession(sessionId: string, input: JoinSessionInput): P
     isHost: input.isHost ?? false,
     isReady: false,
     joinedAt: null,
-    commander: null,
-    decklist: null,
+    commander: input.commander ?? null,
+    decklist: input.decklist ?? null,
+    deckName: input.deckName ?? null,
+    deckSourceUrl: input.deckSourceUrl ?? null,
     diceRoll: null,
     health: startingLife,
     poison: 0,
@@ -180,6 +187,40 @@ export async function getSessionPlayers(sessionId: string): Promise<SessionPlaye
   return snap.docs.map((d) => d.data() as SessionPlayer);
 }
 
+/**
+ * Find all active (non-completed) sessions the user is currently in.
+ * Uses a collection group query on the 'players' subcollection to find
+ * session IDs, then fetches the full session docs.
+ *
+ * Returns sessions sorted by most recently created first.
+ */
+export async function getActiveSessions(uid: string): Promise<Session[]> {
+  // Collection group: find all player docs belonging to this user.
+  const playerQuery = query(collectionGroup(db, 'players'), where('uid', '==', uid));
+  const playerSnap = await getDocs(playerQuery);
+
+  if (playerSnap.empty) return [];
+
+  // Extract session IDs from the paths: sessions/{sessionId}/players/{uid}
+  const sessionIds = playerSnap.docs.map((d) => d.ref.parent.parent?.id).filter(Boolean) as string[];
+
+  // Fetch each session doc in parallel.
+  const sessionSnaps = await Promise.all(
+    sessionIds.map((id) => getDoc(doc(db, 'sessions', id))),
+  );
+
+  // Filter to active sessions only (lobby or in_progress).
+  return sessionSnaps
+    .filter((snap) => snap.exists())
+    .map((snap) => ({ ...snap.data(), id: snap.id }) as Session)
+    .filter((s) => s.status === 'lobby' || s.status === 'in_progress')
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toMillis?.() ?? 0;
+      const bTime = b.createdAt?.toMillis?.() ?? 0;
+      return bTime - aTime; // newest first
+    });
+}
+
 /* --------------------------------------------------------
  * Player setup (commander, decklist, ready)
  * -------------------------------------------------------- */
@@ -196,8 +237,14 @@ export async function setPlayerDecklist(
   sessionId: string,
   uid: string,
   decklist: Decklist | null,
+  deckName: string | null = null,
+  deckSourceUrl: string | null = null,
 ): Promise<void> {
-  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), { decklist });
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
+    decklist,
+    deckName,
+    deckSourceUrl,
+  });
 }
 
 export async function setPlayerReady(
@@ -234,6 +281,44 @@ export async function rollDice(sessionId: string, uid: string): Promise<number> 
     message: `rolled a ${roll}.`,
   });
   return roll;
+}
+
+/**
+ * Clear a single player's dice roll. Called by each client when the host
+ * increments the session-level diceResetCount signal.
+ */
+export async function clearMyDiceRoll(sessionId: string, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), { diceRoll: null });
+}
+
+/**
+ * Reset all dice rolls by incrementing a counter on the session doc.
+ * Each client watches this counter via real-time subscription and
+ * clears its own diceRoll when it changes (see LobbyPage).
+ *
+ * This approach only requires the host's session-doc update permission
+ * (which is always allowed), avoiding permission-denied errors that
+ * occur when the host tries to write other players' docs directly.
+ */
+export async function resetDiceRolls(sessionId: string): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session) throw new Error('Session not found');
+
+  // Increment the reset counter — clients react to this.
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    diceResetCount: (session.diceResetCount ?? 0) + 1,
+  });
+
+  // Also clear the host's own roll immediately (they have permission).
+  const hostUid = session.hostUid;
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', hostUid), {
+    diceRoll: null,
+  });
+
+  await addEvent(sessionId, {
+    type: 'dice_rolled',
+    message: 'Host reset all dice rolls.',
+  });
 }
 
 /**

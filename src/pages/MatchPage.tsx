@@ -65,18 +65,32 @@ export default function MatchPage() {
     );
   }
 
+  // Guard against race condition: session doc loaded (status: in_progress)
+  // but players array hasn't populated yet. Without this guard,
+  // getDisplayName(undefined) throws a TypeError and React shows a black screen.
+  if (players.length === 0) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner" />
+        <p className="text-muted">Loading match data…</p>
+      </div>
+    );
+  }
+
+  // Safe accessor — the current turn player may not exist yet if index is stale.
+  const currentTurnPlayer =
+    orderedPlayers[session.currentTurnIndex] ?? orderedPlayers[0] ?? players[0];
+
   return (
     <div className={`match-container ${isCompleted ? 'match-completed' : ''}`}>
       {/* Header bar */}
       <div className="match-header">
         <Link to="/" className="btn btn-outline btn-sm">← Exit</Link>
         <div className="turn-indicator">
-          {session.turnOrder.length > 0 && !isCompleted && (
+          {session.turnOrder.length > 0 && !isCompleted && currentTurnPlayer && (
             <>
               <span className="text-muted">Turn: </span>
-              <strong>
-                {getDisplayName(orderedPlayers[session.currentTurnIndex] ?? players[0])}
-              </strong>
+              <strong>{getDisplayName(currentTurnPlayer)}</strong>
             </>
           )}
           {isCompleted && <strong>Game Over</strong>}

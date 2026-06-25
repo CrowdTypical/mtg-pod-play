@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '@/context/AuthContext';
-import { getSessionByCode, joinSession } from '@/services/sessionService';
+import {
+  getSessionByCode,
+  joinSession,
+  setPlayerCommander,
+  setPlayerDecklist,
+} from '@/services/sessionService';
 import {
   enrichDecklist,
   importFromArchidekt,
@@ -29,6 +34,8 @@ export default function JoinPage() {
   const [decklistText, setDecklistText] = useState('');
   const [archidektUrl, setArchidektUrl] = useState('');
   const [decklist, setDecklist] = useState<Decklist | null>(null);
+  const [deckName, setDeckName] = useState<string | null>(null);
+  const [deckSourceUrl, setDeckSourceUrl] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
 
   const [error, setError] = useState('');
@@ -64,6 +71,8 @@ export default function JoinPage() {
       const parsed = parseDecklistText(decklistText);
       const enriched = await enrichDecklist(parsed);
       setDecklist(enriched);
+      setDeckName(null);
+      setDeckSourceUrl(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse decklist.');
     } finally {
@@ -77,8 +86,10 @@ export default function JoinPage() {
     setError('');
     try {
       const imported = await importFromArchidekt(archidektUrl);
-      const enriched = await enrichDecklist(imported);
+      const enriched = await enrichDecklist(imported.decklist);
       setDecklist(enriched);
+      setDeckName(imported.name);
+      setDeckSourceUrl(imported.sourceUrl);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to import from Archidekt.');
     } finally {
@@ -101,12 +112,25 @@ export default function JoinPage() {
         setJoining(false);
         return;
       }
+      // Join with core identity first, then write commander/decklist as
+      // separate updates. This avoids a race condition where a single
+      // large setDoc can be overwritten by the real-time subscription's
+      // initial snapshot before all fields propagate.
       await joinSession(session.id, {
         uid: user.uid,
         displayName: profile.displayName,
         nickname: nickname.trim() || undefined,
         startingLife: session.startingLife,
       });
+
+      // Write commander and decklist as explicit follow-up updates.
+      if (selectedCommander) {
+        await setPlayerCommander(session.id, user.uid, selectedCommander);
+      }
+      if (decklist) {
+        await setPlayerDecklist(session.id, user.uid, decklist, deckName, deckSourceUrl);
+      }
+
       navigate(`/session/${session.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join game.');

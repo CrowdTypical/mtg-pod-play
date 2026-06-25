@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useAuth } from '@/context/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import SignupPage from '@/pages/SignupPage';
@@ -13,7 +14,7 @@ import LobbyPage from '@/pages/LobbyPage';
 import MatchPage from '@/pages/MatchPage';
 import ProfilePage from '@/pages/ProfilePage';
 import OverlayPage from '@/pages/OverlayPage';
-import { getSession } from '@/services/sessionService';
+import { subscribeToSession } from '@/services/sessionService';
 import type { Session } from '@/types';
 
 function LoadingScreen() {
@@ -32,24 +33,23 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-/** Routes to lobby or match page based on session status. */
+/** Routes to lobby or match page based on session status.
+ *  Uses a real-time subscription so it reacts instantly when
+ *  the host starts the game (status: lobby → in_progress). */
 function SessionRouter() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    if (!sessionId) return;
-    let active = true;
-    getSession(sessionId)
-      .then((s) => {
-        if (active) setSession(s);
-      })
-      .catch(() => {
-        if (active) setSession(null);
-      });
-    return () => {
-      active = false;
-    };
+    if (!sessionId) {
+      setSession(null);
+      return;
+    }
+    setSession(undefined); // reset on session change
+    const unsub = subscribeToSession(sessionId, (s) => {
+      setSession(s);
+    });
+    return unsub;
   }, [sessionId]);
 
   if (session === undefined) return <LoadingScreen />;
@@ -74,9 +74,10 @@ export default function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <Routes>
-      {/* Auth routes (public) */}
-      <Route path="/login" element={<LoginPage />} />
+    <ErrorBoundary>
+      <Routes>
+        {/* Auth routes (public) */}
+        <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
@@ -127,6 +128,7 @@ export default function App() {
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </ErrorBoundary>
   );
 }
