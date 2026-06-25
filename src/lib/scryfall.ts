@@ -1,0 +1,213 @@
+import type { CommanderInfo, Decklist, DecklistEntry, ScryfallCard } from '@/types';
+
+/**
+ * Scryfall API client.
+ * Docs: https://scryfall.com/docs/api
+ * No API key required. Rate limit: ~10 requests/second — be courteous.
+ */
+
+const SCRYFALL_BASE = 'https://api.scryfall.com';
+
+/** Small delay helper to respect Scryfall's 50-100ms requested delay. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function scryfallFetch<T>(path: string): Promise<T> {
+  const res = await fetch(`${SCRYFALL_BASE}${path}`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const msg = (body as { details?: string }).details || res.statusText;
+    throw new Error(`Scryfall API error (${res.status}): ${msg}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/* --------------------------------------------------------
+ * Commander search
+ * -------------------------------------------------------- */
+
+export async function searchCommanders(query: string): Promise<CommanderInfo[]> {
+  if (!query.trim()) return [];
+  // is:commander covers Legendary Creatures with legal commander types,
+  // plus the backgrounds, backgrounds-companions, etc. This is the most
+  // reliable single filter for the format.
+  const q = encodeURIComponent(`${query} (is:commander)`);
+  const data = await scryfallFetch<ScryfallSearchResponse>(
+    `/cards/search?q=${q}&order=name&unique=cards`,
+  );
+  return data.data.map(cardToCommander).filter((c): c is CommanderInfo => c !== null);
+}
+
+interface ScryfallSearchResponse {
+  data: ScryfallCard[];
+  has_more: boolean;
+}
+
+function cardToCommander(card: ScryfallCard): CommanderInfo | null {
+  const img = card.image_uris ?? card.card_faces?.[0]?.image_uris;
+  if (!card.type_line) return null;
+  return {
+    scryfallId: card.id,
+    name: card.name,
+    manaCost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost,
+    typeLine: card.type_line,
+    imageUris: img
+      ? {
+          small: img.small,
+          normal: img.normal,
+          large: img.large,
+        }
+      : undefined,
+    colors: card.color_identity ?? [],
+    partner: (card.oracle_text ?? '').toLowerCase().includes('partner'),
+  };
+}
+
+/* --------------------------------------------------------
+ * Single card by name (used for decklist resolution)
+ * -------------------------------------------------------- */
+
+export async function getCardByName(name: string): Promise<ScryfallCard | null> {
+  const q = encodeURIComponent(`!"${name}"`);
+  try {
+    const data = await scryfallFetch<ScryfallCard>(`/cards/named?fuzzy=${q}`);
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Bulk-resolve card names to images using Scryfall's /cards/collection endpoint. */
+export async function resolveCardCollection(
+  entries: { name: string }[],
+): Promise<Map<string, ScryfallCard>> {
+  const result = new Map<string, ScryfallCard>();
+  // Scryfall's collection endpoint accepts up to 75 identifiers per request.
+  const CHUNK_SIZE = 75;
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    const chunk = entries.slice(i, i + CHUNK_SIZE);
+    const identifiers = chunk.map((e) => ({ name: e.name }));
+    try {
+      const res = await fetch(`${SCRYFALL_BASE}/cards/collection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifiers }),
+      });
+      const data = (await res.json()) as { data?: ScryfallCard[]; not_found?: { name: string }[] };
+      data.data?.forEach((card) => result.set(card.name.toLowerCase(), card));
+    } catch {
+      // Network/parse error on a chunk — skip it, caller handles missing images.
+    }
+    if (i + CHUNK_SIZE < entries.length) await delay(100);
+  }
+  return result;
+}
+
+/* --------------------------------------------------------
+ * Decklist parsing (paste-in format)
+ * -------------------------------------------------------- */
+
+/**
+ * Parse a pasted decklist into structured entries.
+ * Supports common formats:
+ *   "4 Lightning Bolt"
+ *   "4x Lightning Bolt"
+ *   "Lightning Bolt"
+ *   "// Sideboard" (comments ignored)
+ */
+export function parseDecklistText(text: string): Decklist {
+  const lines = text.split(/\r?\n/);
+  const entries: Decklist = [];
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line.startsWith('//') || line.startsWith('#')) continue; // comment
+    // Section headers like "Sideboard:" — we keep them as comments (skip).
+    if (/^(sideboard|commander|main|deck|maybeboard)\b:?/i.test(line)) continue;
+
+    // Match optional count prefix.
+    const match = line.match(/^(?:(\d+)\s*[xX]?\s+)?(.+)$/);
+    if (!match) continue;
+    const count = match[1] ? parseInt(match[1], 10) : 1;
+    let name = match[2].trim();
+    // Strip trailing set code, e.g. "Lightning Bolt (XLN) 149".
+    name = name.replace(/\s*\([A-Z0-9]{3,4}\)\s*\d*$/, '').trim();
+
+    if (name) {
+      entries.push({ count, name });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Given a parsed decklist (names only), resolve images & scryfall IDs.
+ * Mutates a copy with imageUrl/scryfallId populated.
+ */
+export async function enrichDecklist(entries: DecklistEntry[]): Promise<DecklistEntry[]> {
+  // De-duplicate names for the collection lookup.
+  const uniqueNames = Array.from(new Set(entries.map((e) => e.name)));
+  const cardMap = await resolveCardCollection(uniqueNames.map((n) => ({ name: n })));
+
+  return entries.map((entry) => {
+    const card = cardMap.get(entry.name.toLowerCase());
+    if (!card) return entry;
+    const img = card.image_uris ?? card.card_faces?.[0]?.image_uris;
+    return {
+      ...entry,
+      scryfallId: card.id,
+      imageUrl: img?.normal ?? img?.small,
+    };
+  });
+}
+
+/* --------------------------------------------------------
+ * Archidekt import
+ * -------------------------------------------------------- */
+
+/**
+ * Fetch a decklist from an Archidekt deck URL.
+ * Archidekt provides a public JSON API: https://archidekt.com/api/decks/{id}/
+ * The deck ID is the numeric portion of the URL.
+ */
+export async function importFromArchidekt(url: string): Promise<Decklist> {
+  const idMatch = url.match(/archidekt\.com\/decks\/(\d+)/);
+  if (!idMatch) throw new Error('Invalid Archidekt URL. Expected archidekt.com/decks/{id}');
+  const deckId = idMatch[1];
+
+  const res = await fetch(`https://archidekt.com/api/decks/${deckId}/`, {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`Failed to fetch Archidekt deck (${res.status})`);
+  const data = (await res.json()) as ArchidektDeck;
+
+  const entries: Decklist = [];
+  for (const card of data.cards) {
+    if (card.card?.board !== 'Main' && !card.card?.board) continue;
+    entries.push({
+      count: card.quantity,
+      name: card.card.name,
+      scryfallId: card.card.uid,
+      imageUrl: card.card.image_small ?? card.card.image_crop,
+      isCommander: (card.card.board ?? '').toLowerCase() === 'commander' || !!card.card.featured,
+    });
+  }
+  return entries;
+}
+
+interface ArchidektDeck {
+  cards: Array<{
+    quantity: number;
+    card: {
+      name: string;
+      uid: string;
+      board?: string;
+      image_small?: string;
+      image_crop?: string;
+      featured?: boolean;
+    };
+  }>;
+}
