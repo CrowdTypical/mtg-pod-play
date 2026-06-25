@@ -518,3 +518,99 @@ a:hover {
   color: #f59e0b !important;
   background: rgba(245, 158, 11, 0.15) !important;
 }
+
+/* ===== Setup Required (no Firebase config) ===== */
+.setup-required {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-xl) var(--space-md);
+  background: var(--color-bg);
+}
+
+.setup-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-2xl);
+  max-width: 680px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+}
+
+.setup-card h1 {
+  color: var(--color-primary);
+  font-size: 2rem;
+  margin-bottom: var(--space-md);
+}
+
+.setup-steps {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.setup-steps li {
+  color: var(--color-text);
+  line-height: 1.7;
+}
+
+.setup-steps strong {
+  color: var(--color-primary);
+}
+
+.setup-code {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-top: var(--space-sm);
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.setup-required-vars {
+  background: var(--color-bg-input);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.setup-required-vars ul {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+}
+
+.setup-required-vars li {
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+}
+
+.setup-hint {
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+@media (max-width: 600px) {
+  .setup-required-vars ul {
+    grid-template-columns: 1fr;
+  }
+  .setup-card {
+    padding: var(--space-lg);
+  }
+}
