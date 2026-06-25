@@ -2,27 +2,23 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 /**
  * Serverless proxy for Archidekt API requests.
- * Avoids CORS issues and is more reliable than rewrite rules.
+ * Avoids CORS issues by fetching server-side.
  *
- * Client calls: /api/archidekt/decks/123/
- * Proxy fetches: https://archidekt.com/api/decks/123/
+ * Route: /api/archidekt/* → https://archidekt.com/api/*
+ *
+ * The full path is reconstructed from req.url.
  */
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-  // Build the target URL from the path segments.
-  const segments = Array.isArray(req.query.path)
-    ? req.query.path
-    : [req.query.path];
-  const path = segments.join('/');
+  // req.url will be something like "/api/archidekt/decks/123/?recursive=true"
+  // Strip "/api/archidekt" prefix to get the Archidekt API path
+  const url = req.url || '';
+  const apiPath = url.replace(/^\/api\/archidekt/, '').split('?')[0];
+  const queryString = url.includes('?') ? '?' + url.split('?')[1] : '';
 
-  // Forward query string (e.g. ?recursive=true)
-  const queryString = req.url?.includes('?')
-    ? req.url.substring(req.url.indexOf('?'))
-    : '';
-
-  const targetUrl = `https://archidekt.com/api/${path}${queryString}`;
+  const targetUrl = `https://archidekt.com/api/${apiPath}${queryString}`;
 
   try {
     const response = await fetch(targetUrl, {
@@ -32,15 +28,19 @@ export default async function handler(
       },
     });
 
-    // Set CORS headers so the browser allows the response.
+    // Set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+
     if (!response.ok) {
       res.status(response.status).json({
         error: `Archidekt returned ${response.status}`,
-        details: await response.text().catch(() => null),
       });
       return;
     }
