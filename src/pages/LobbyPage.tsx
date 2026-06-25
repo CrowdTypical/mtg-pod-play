@@ -512,18 +512,26 @@ function MySetupPanel({
   const [importing, setImporting] = useState(false);
   const [rolling, setRolling] = useState(false);
   const [togglingReady, setTogglingReady] = useState(false);
+  const [importError, setImportError] = useState('');
 
   const uid = user!.uid;
 
   async function handleImportPaste() {
     if (!decklistText.trim()) return;
     setImporting(true);
+    setImportError('');
     try {
       const parsed = parseDecklistText(decklistText);
+      if (parsed.length === 0) {
+        setImportError('No cards found in pasted text. Check the format.');
+        return;
+      }
       const enriched = await enrichDecklist(parsed);
       await setPlayerDecklist(sessionId, uid, enriched, null, null);
       setShowDeckImport(false);
       setDecklistText('');
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to import decklist.');
     } finally {
       setImporting(false);
     }
@@ -532,12 +540,16 @@ function MySetupPanel({
   async function handleImportArchidekt() {
     if (!archidektUrl.trim()) return;
     setImporting(true);
+    setImportError('');
     try {
       const imported = await importFromArchidekt(archidektUrl);
       const enriched = await enrichDecklist(imported.decklist);
       await setPlayerDecklist(sessionId, uid, enriched, imported.name, imported.sourceUrl);
       setShowDeckImport(false);
       setArchidektUrl('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to import from Archidekt.';
+      setImportError(msg);
     } finally {
       setImporting(false);
     }
@@ -599,6 +611,7 @@ function MySetupPanel({
           </div>
         ) : showDeckImport ? (
           <div>
+            {importError && <p className="form-error mb-sm">{importError}</p>}
             <div className="flex gap-sm mb-sm">
               <textarea
                 className="form-input"
