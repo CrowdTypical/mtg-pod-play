@@ -178,22 +178,43 @@ export async function importFromArchidekt(url: string): Promise<Decklist> {
   if (!idMatch) throw new Error('Invalid Archidekt URL. Expected archidekt.com/decks/{id}');
   const deckId = idMatch[1];
 
-  const res = await fetch(`https://archidekt.com/api/decks/${deckId}/`, {
-    headers: { Accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`Failed to fetch Archidekt deck (${res.status})`);
+  // Use the relative proxy path (/api/archidekt) to avoid CORS issues.
+  // In dev, Vite proxies this to https://archidekt.com/api.
+  // In prod, Vercel rewrites this to https://archidekt.com/api.
+  const apiUrl = `/api/archidekt/decks/${deckId}/`;
+  let res: Response;
+  try {
+    res = await fetch(apiUrl, {
+      headers: { Accept: 'application/json' },
+    });
+  } catch (networkErr) {
+    throw new Error(
+      'Network error contacting Archidekt. The site may be down or blocking requests.',
+    );
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch Archidekt deck (${res.status}). Check that the deck is public.`,
+    );
+  }
   const data = (await res.json()) as ArchidektDeck;
 
   const entries: Decklist = [];
   for (const card of data.cards) {
-    if (card.card?.board !== 'Main' && !card.card?.board) continue;
+    // Include cards in the Main board, or cards with no board specified.
+    const board = card.card?.board;
+    if (board && board !== 'Main' && board !== 'Commander') continue;
     entries.push({
       count: card.quantity,
       name: card.card.name,
       scryfallId: card.card.uid,
       imageUrl: card.card.image_small ?? card.card.image_crop,
-      isCommander: (card.card.board ?? '').toLowerCase() === 'commander' || !!card.card.featured,
+      isCommander:
+        (board ?? '').toLowerCase() === 'commander' || !!card.card.featured,
     });
+  }
+  if (entries.length === 0) {
+    throw new Error('No cards found in the Main board. Is the deck public?');
   }
   return entries;
 }

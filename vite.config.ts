@@ -13,6 +13,14 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    proxy: {
+      // Proxy Archidekt API requests to avoid CORS issues in dev.
+      '/api/archidekt': {
+        target: 'https://archidekt.com/api',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/archidekt/, ''),
+      },
+    },
   },
   build: {
     chunkSizeWarningLimit: 700,
