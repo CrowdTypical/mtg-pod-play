@@ -42,12 +42,21 @@ export interface ScryfallCard {
   };
   power?: string;
   toughness?: string;
+  loyalty?: string;
   colors?: string[];
   color_identity?: string[];
   cmc: number;
+  rarity?: string;
+  set?: string;
+  set_name?: string;
+  collector_number?: string;
+  flavor_text?: string;
+  legalities?: Record<string, string>; // e.g. { commander: 'legal', modern: 'banned' }
+  prices?: { usd?: string | null; usd_foil?: string | null };
   // For double-faced / modal cards, card_faces contains the per-face data.
   card_faces?: Array<Omit<ScryfallCard, 'card_faces'>>;
   scryfall_uri?: string;
+  rulings_uri?: string;
 }
 
 export interface CommanderInfo {
@@ -93,6 +102,13 @@ export interface DeckSummary {
  * ============================================================ */
 
 export type SessionStatus = 'lobby' | 'in_progress' | 'completed';
+
+/**
+ * Match control modes.
+ * - 'normal': Each player controls only their own stats. Players pass their own turn.
+ * - 'host_driven': The host controls all players' stats.
+ */
+export type MatchMode = 'normal' | 'host_driven';
 
 export interface SessionPlayer {
   uid: string;
@@ -158,6 +174,7 @@ export interface Session {
   hostUid: string;
   maxPlayers: number;
   status: SessionStatus;
+  matchMode: MatchMode;
   turnOrder: string[]; // Array of UIDs in turn order
   currentTurnIndex: number;
   startingLife: number;

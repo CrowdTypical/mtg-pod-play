@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/context/AuthContext';
 import { createSession } from '@/services/sessionService';
+import type { MatchMode } from '@/types';
 
 export default function SetupPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [startingLife, setStartingLife] = useState(40);
+  const [matchMode, setMatchMode] = useState<MatchMode>('normal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,6 +25,7 @@ export default function SetupPage() {
         hostNickname: profile.nickname,
         maxPlayers,
         startingLife,
+        matchMode,
       });
       navigate(`/session/${sessionId}`);
     } catch (err) {
@@ -84,6 +87,58 @@ export default function SetupPage() {
             </button>
           </div>
           <p className="form-hint mt-md">Standard Commander is 40 life.</p>
+        </div>
+
+        <div className="divider" />
+
+        {/* Match control mode */}
+        <div className="form-group">
+          <label className="form-label">Control Mode</label>
+          <p className="form-hint mb-md">
+            Choose how stats are controlled during the match.
+          </p>
+          <div className="flex flex-col gap-sm">
+            <label
+              className={`card cursor-pointer ${matchMode === 'normal' ? 'border-primary' : ''}`}
+              style={{ padding: '1rem', margin: 0, cursor: 'pointer' }}
+            >
+              <div className="flex items-start gap-sm">
+                <input
+                  type="radio"
+                  name="matchMode"
+                  checked={matchMode === 'normal'}
+                  onChange={() => setMatchMode('normal')}
+                  style={{ marginTop: 4 }}
+                />
+                <div>
+                  <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Player-Driven</p>
+                  <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+                    Each player controls only their own stats on their own device. Best for in-person pods.
+                  </p>
+                </div>
+              </div>
+            </label>
+            <label
+              className={`card cursor-pointer ${matchMode === 'host_driven' ? 'border-primary' : ''}`}
+              style={{ padding: '1rem', margin: 0, cursor: 'pointer' }}
+            >
+              <div className="flex items-start gap-sm">
+                <input
+                  type="radio"
+                  name="matchMode"
+                  checked={matchMode === 'host_driven'}
+                  onChange={() => setMatchMode('host_driven')}
+                  style={{ marginTop: 4 }}
+                />
+                <div>
+                  <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Host-Driven</p>
+                  <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+                    The host controls all players' stats from one device. Best for digital/streamed games.
+                  </p>
+                </div>
+              </div>
+            </label>
+          </div>
         </div>
 
         {error && <p className="form-error">{error}</p>}

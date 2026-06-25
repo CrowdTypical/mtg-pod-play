@@ -1266,3 +1266,227 @@ a:hover {
   border-radius: 3px;
   flex-shrink: 0;
 }
+
+/* ============================================================
+ * Match Page — Larger buttons, pass turn, host menu, card modal
+ * (Additions)
+ * ============================================================ */
+
+/* Larger stat buttons for easier mobile tapping */
+.stat-btn-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 1.6rem;
+  border-radius: var(--radius-md);
+}
+
+/* Pass turn button — prominent */
+.pass-turn-btn {
+  font-size: 1rem !important;
+  padding: 0.6rem 1rem !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(212, 175, 55, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+  }
+}
+
+/* Host banner */
+.host-banner {
+  text-align: center;
+  padding: var(--space-xs) var(--space-md);
+  background: rgba(212, 175, 55, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  border-radius: var(--radius-md);
+}
+
+/* Host dropdown menu */
+.host-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-xs);
+  min-width: 160px;
+  z-index: 10;
+}
+
+.host-menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.host-menu-item:hover {
+  background: var(--color-bg-input);
+}
+
+/* Decklist entries are now clickable */
+.decklist-entry-clickable {
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  border: 1px solid transparent;
+}
+
+.decklist-entry-clickable:hover {
+  border-color: var(--color-primary);
+  background: rgba(212, 175, 55, 0.05);
+}
+
+/* Gap utility for flex wrappers */
+.gap-xs { gap: var(--space-xs); }
+
+/* Accent outline button (revive) */
+.btn-accent-outline {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: transparent;
+}
+.btn-accent-outline:hover:not(:disabled) {
+  background: rgba(75, 139, 92, 0.1);
+}
+
+/* ============================================================
+ * Card Detail Modal
+ * ============================================================ */
+
+.card-detail-modal {
+  max-width: 900px;
+}
+
+.card-detail-body {
+  display: flex;
+  gap: var(--space-lg);
+}
+
+.card-detail-images {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.card-detail-img {
+  width: 280px;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  display: block;
+}
+
+.card-detail-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.card-detail-mana {
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.05em;
+}
+
+.card-detail-type {
+  font-size: 0.9rem;
+  margin-bottom: var(--space-sm);
+}
+
+.card-detail-oracle {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+
+.card-detail-flavor {
+  font-style: italic;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: var(--space-sm);
+  padding-left: var(--space-sm);
+  border-left: 2px solid var(--color-border);
+}
+
+.card-detail-meta {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+}
+
+.card-detail-prices {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.card-detail-prices .badge {
+  background: var(--color-bg-input);
+  color: var(--color-accent);
+  text-transform: none;
+}
+
+.card-detail-legalities {
+  margin-top: var(--space-md);
+}
+
+.badge-legal {
+  background: rgba(75, 139, 92, 0.15);
+  color: var(--color-accent);
+  border: 1px solid rgba(75, 139, 92, 0.3);
+  text-transform: capitalize;
+}
+
+.badge-banned {
+  background: rgba(196, 69, 58, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(196, 69, 58, 0.3);
+  text-transform: capitalize;
+}
+
+.card-face-block {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px dashed var(--color-border);
+}
+
+.card-face-name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+/* Responsive: stack card detail on mobile */
+@media (max-width: 640px) {
+  .card-detail-body {
+    flex-direction: column;
+    align-items: center;
+  }
+  .card-detail-img {
+    width: 100%;
+    max-width: 300px;
+  }
+  .card-detail-info {
+    width: 100%;
+  }
+}

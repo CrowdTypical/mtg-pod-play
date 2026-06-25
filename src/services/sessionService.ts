@@ -19,6 +19,7 @@ import type {
   CommanderDamageMap,
   CommanderInfo,
   Decklist,
+  MatchMode,
   Session,
   SessionEvent,
   SessionPlayer,
@@ -63,11 +64,13 @@ export interface CreateSessionInput {
   hostNickname?: string | null;
   maxPlayers: number; // 2–7
   startingLife?: number;
+  matchMode?: MatchMode;
 }
 
 export async function createSession(input: CreateSessionInput): Promise<string> {
   const maxPlayers = Math.min(7, Math.max(2, input.maxPlayers));
   const startingLife = input.startingLife ?? DEFAULT_STARTING_LIFE;
+  const matchMode = input.matchMode ?? 'normal';
   const code = await generateUniqueCode();
 
   const sessionRef = doc(collection(db, 'sessions'));
@@ -79,6 +82,7 @@ export async function createSession(input: CreateSessionInput): Promise<string> 
     hostUid: input.hostUid,
     maxPlayers,
     status: 'lobby',
+    matchMode,
     turnOrder: [],
     currentTurnIndex: 0,
     startingLife,
@@ -161,6 +165,29 @@ export async function leaveSession(sessionId: string, uid: string): Promise<void
     type: 'player_left',
     uid,
     message: `A player left the game.`,
+  });
+}
+
+/**
+ * Transfer host privileges to another player in the session.
+ * The current host calls this. Updates the session's hostUid and
+ * flips the isHost flags on both player docs.
+ */
+export async function transferHost(sessionId: string, newHostUid: string): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session) throw new Error('Session not found');
+  const oldHostUid = session.hostUid;
+
+  await updateDoc(doc(db, 'sessions', sessionId), { hostUid: newHostUid });
+
+  // Update isHost flags on both players.
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', oldHostUid), { isHost: false });
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', newHostUid), { isHost: true });
+
+  await addEvent(sessionId, {
+    type: 'player_joined',
+    uid: newHostUid,
+    message: `Host privileges were transferred.`,
   });
 }
 
@@ -511,6 +538,33 @@ export async function endGame(sessionId: string): Promise<void> {
   await addEvent(sessionId, {
     type: 'game_ended',
     message: 'The game has ended.',
+  });
+}
+
+/**
+ * Revive a previously eliminated player (undo elimination).
+ * Clears eliminated flag and placement. Does NOT restart an ended game —
+ * if the game is already 'completed', the host should use a different flow.
+ */
+export async function revivePlayer(sessionId: string, uid: string): Promise<void> {
+  const session = await getSession(sessionId);
+  if (!session) return;
+  // If game is already over, we need to flip it back to in_progress.
+  if (session.status === 'completed') {
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      status: 'in_progress',
+      endedAt: null,
+    });
+  }
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
+    eliminated: false,
+    eliminatedAt: null,
+    placement: null,
+  });
+  await addEvent(sessionId, {
+    type: 'player_joined',
+    uid,
+    message: `A player was revived.`,
   });
 }
 

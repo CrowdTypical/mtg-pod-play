@@ -42,10 +42,15 @@ service cloud.firestore {
     match /sessions/{sessionId} {
       allow read: if isAuthenticated();
 
-      // Only the host can create, update, or delete the session document.
+      // Any authenticated user can create a session they host.
       allow create: if isAuthenticated()
                     && request.resource.data.hostUid == request.auth.uid;
-      allow update: if isHostOf(sessionId);
+      // The host can update the full session document.
+      // Any authenticated player may update ONLY currentTurnIndex (turn passing).
+      allow update: if isHostOf(sessionId)
+                    || (isAuthenticated()
+                        && request.resource.data.diff(resource.data)
+                           .affectedKeys().hasOnly(['currentTurnIndex']));
       allow delete: if isHostOf(sessionId);
 
       // ---- PLAYERS in a session ----

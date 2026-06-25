@@ -80,6 +80,19 @@ export async function getCardByName(name: string): Promise<ScryfallCard | null> 
   }
 }
 
+/**
+ * Fetch full details for a single card by its Scryfall ID.
+ * Used by the card-focus modal to show all card info (oracle text,
+ * prices, legalities, etc.).
+ */
+export async function getCardById(scryfallId: string): Promise<ScryfallCard | null> {
+  try {
+    return await scryfallFetch<ScryfallCard>(`/cards/${scryfallId}`);
+  } catch {
+    return null;
+  }
+}
+
 /** Bulk-resolve card names to images using Scryfall's /cards/collection endpoint. */
 export async function resolveCardCollection(
   entries: { name: string }[],

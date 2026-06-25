@@ -8,14 +8,18 @@ import {
   adjustPlayerPoison,
   advanceTurn,
   eliminatePlayer,
+  revivePlayer,
+  transferHost,
   subscribeToCommanderDamage,
   subscribeToEvents,
   subscribeToPlayers,
   subscribeToSession,
 } from '@/services/sessionService';
+import { getCardById, getCardByName } from '@/lib/scryfall';
 import type {
   CommanderDamageMap,
   Decklist,
+  ScryfallCard,
   Session,
   SessionEvent,
   SessionPlayer,
@@ -31,6 +35,11 @@ export default function MatchPage() {
   const [cmdDamage, setCmdDamage] = useState<CommanderDamageMap>({});
   const [events, setEvents] = useState<SessionEvent[]>([]);
   const [selectedDeckUid, setSelectedDeckUid] = useState<string | null>(null);
+  const [focusedCard, setFocusedCard] = useState<{
+    scryfallId?: string;
+    name: string;
+    imageUrl?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -65,9 +74,7 @@ export default function MatchPage() {
     );
   }
 
-  // Guard against race condition: session doc loaded (status: in_progress)
-  // but players array hasn't populated yet. Without this guard,
-  // getDisplayName(undefined) throws a TypeError and React shows a black screen.
+  // Guard: session loaded but players not yet populated.
   if (players.length === 0) {
     return (
       <div className="loading-screen">
@@ -77,9 +84,17 @@ export default function MatchPage() {
     );
   }
 
-  // Safe accessor — the current turn player may not exist yet if index is stale.
+  const isHost = user?.uid === session.hostUid;
+  const matchMode = session.matchMode ?? 'normal';
   const currentTurnPlayer =
     orderedPlayers[session.currentTurnIndex] ?? orderedPlayers[0] ?? players[0];
+
+  /** Whether the current user can edit this player's stats. */
+  function canControl(player: SessionPlayer): boolean {
+    if (!user) return false;
+    if (matchMode === 'host_driven') return isHost;
+    return user.uid === player.uid; // normal mode: only self
+  }
 
   return (
     <div className={`match-container ${isCompleted ? 'match-completed' : ''}`}>
@@ -93,9 +108,9 @@ export default function MatchPage() {
               <strong>{getDisplayName(currentTurnPlayer)}</strong>
             </>
           )}
-          {isCompleted && <strong>Game Over</strong>}
+          {isCompleted && <strong>🏁 Game Over</strong>}
         </div>
-        {!isCompleted && user?.uid === session.hostUid && (
+        {!isCompleted && isHost && (
           <button
             onClick={() => sessionId && advanceTurn(sessionId)}
             className="btn btn-primary btn-sm"
@@ -103,8 +118,19 @@ export default function MatchPage() {
             Next Turn →
           </button>
         )}
-        <div style={{ width: isCompleted ? 0 : 0 }} />
+        <div />
       </div>
+
+      {/* Host info banner */}
+      {isHost && !isCompleted && (
+        <div className="host-banner">
+          <span className="text-muted" style={{ fontSize: '0.85rem' }}>
+            {matchMode === 'host_driven'
+              ? '🎛️ Host-Driven Mode — you control all players'
+              : '👤 Player-Driven Mode — each player controls their own board'}
+          </span>
+        </div>
+      )}
 
       {/* Player grid — scales to 7 players */}
       <div className={`player-grid player-grid-${orderedPlayers.length}`}>
@@ -114,10 +140,14 @@ export default function MatchPage() {
             player={player}
             isCurrentTurn={!isCompleted && idx === session.currentTurnIndex}
             isMe={user?.uid === player.uid}
+            canControl={canControl(player)}
+            isHost={isHost}
+            matchMode={matchMode}
             cmdDamageFrom={cmdDamage[player.uid] ?? {}}
             players={orderedPlayers}
             sessionId={sessionId!}
             onViewDeck={() => setSelectedDeckUid(player.uid)}
+            onAdvanceTurn={() => sessionId && advanceTurn(sessionId)}
           />
         ))}
       </div>
@@ -140,7 +170,12 @@ export default function MatchPage() {
 
       {/* OBS overlay link */}
       <div className="match-footer">
-        <Link to={`/overlay/${sessionId}`} target="_blank" className="text-muted" style={{ fontSize: '0.8rem' }}>
+        <Link
+          to={`/overlay/${sessionId}`}
+          target="_blank"
+          className="text-muted"
+          style={{ fontSize: '0.8rem' }}
+        >
           📺 Open OBS Overlay
         </Link>
       </div>
@@ -150,7 +185,13 @@ export default function MatchPage() {
         <DecklistModal
           player={orderedPlayers.find((p) => p.uid === selectedDeckUid)!}
           onClose={() => setSelectedDeckUid(null)}
+          onCardClick={setFocusedCard}
         />
+      )}
+
+      {/* Card detail modal */}
+      {focusedCard && (
+        <CardDetailModal card={focusedCard} onClose={() => setFocusedCard(null)} />
       )}
     </div>
   );
@@ -164,22 +205,32 @@ function PlayerPanel({
   player,
   isCurrentTurn,
   isMe,
+  canControl,
+  isHost,
+  matchMode,
   cmdDamageFrom,
   players,
   sessionId,
   onViewDeck,
+  onAdvanceTurn,
 }: {
   player: SessionPlayer;
   isCurrentTurn: boolean;
   isMe: boolean;
+  canControl: boolean;
+  isHost: boolean;
+  matchMode: 'normal' | 'host_driven';
   cmdDamageFrom: Record<string, number>;
   players: SessionPlayer[];
   sessionId: string;
   onViewDeck: () => void;
+  onAdvanceTurn: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [showHostMenu, setShowHostMenu] = useState(false);
 
   async function handleHealth(delta: number) {
+    if (!canControl) return;
     setBusy(true);
     try {
       await adjustPlayerHealth(sessionId, player.uid, delta);
@@ -189,6 +240,7 @@ function PlayerPanel({
   }
 
   async function handlePoison(delta: number) {
+    if (!canControl) return;
     setBusy(true);
     try {
       await adjustPlayerPoison(sessionId, player.uid, delta);
@@ -198,6 +250,7 @@ function PlayerPanel({
   }
 
   async function handleCmdDamage(sourceUid: string, delta: number) {
+    if (!canControl) return;
     setBusy(true);
     try {
       await adjustCommanderDamage(sessionId, player.uid, sourceUid, delta);
@@ -207,12 +260,33 @@ function PlayerPanel({
   }
 
   async function handleEliminate() {
+    if (!canControl) return;
     if (!confirm(`Eliminate ${getDisplayName(player)}?`)) return;
     await eliminatePlayer(sessionId, player.uid);
   }
 
+  async function handleRevive() {
+    if (!isHost) return;
+    if (!confirm(`Revive ${getDisplayName(player)}?`)) return;
+    await revivePlayer(sessionId, player.uid);
+  }
+
+  async function handleTransferHost() {
+    if (!isHost) return;
+    if (!confirm(`Transfer host to ${getDisplayName(player)}?`)) return;
+    await transferHost(sessionId, player.uid);
+    setShowHostMenu(false);
+  }
+
   const name = getDisplayName(player);
   const isDead = player.eliminated || player.health <= 0;
+
+  // Pass turn button shows on the current turn player's panel.
+  // Normal mode: only if it's me. Host mode: only if I'm host.
+  const showPassTurn =
+    isCurrentTurn &&
+    !isDead &&
+    ((matchMode === 'normal' && isMe) || (matchMode === 'host_driven' && isHost));
 
   return (
     <div
@@ -229,27 +303,42 @@ function PlayerPanel({
           <div className="flex items-center gap-sm">
             <strong>{name}</strong>
             {player.placement && <span className="placement-badge">#{player.placement}</span>}
+            {player.isHost && <span className="badge badge-host">HOST</span>}
           </div>
           <span className="text-muted panel-cmd-name">{player.commander?.name ?? 'Unknown'}</span>
         </div>
       </div>
 
+      {/* Pass Turn button (prominent, current player only) */}
+      {showPassTurn && (
+        <button
+          onClick={onAdvanceTurn}
+          className="btn btn-primary btn-block btn-sm mb-sm pass-turn-btn"
+        >
+          ⏭️ Pass Turn
+        </button>
+      )}
+
       {/* Health */}
       <div className="stat-health">
         <button
           onClick={() => handleHealth(-1)}
-          className="stat-btn"
-          disabled={busy || isDead}
-        >−</button>
+          className="stat-btn stat-btn-lg"
+          disabled={busy || isDead || !canControl}
+        >
+          −
+        </button>
         <div className="health-display">
           <span className="health-number">{player.health}</span>
           <span className="health-label">Life</span>
         </div>
         <button
           onClick={() => handleHealth(1)}
-          className="stat-btn"
-          disabled={busy || isDead}
-        >+</button>
+          className="stat-btn stat-btn-lg"
+          disabled={busy || isDead || !canControl}
+        >
+          +
+        </button>
       </div>
 
       {/* Quick damage buttons */}
@@ -259,7 +348,7 @@ function PlayerPanel({
             key={n}
             onClick={() => handleHealth(n)}
             className="quick-dmg-btn"
-            disabled={busy || isDead}
+            disabled={busy || isDead || !canControl}
           >
             {n}
           </button>
@@ -271,9 +360,15 @@ function PlayerPanel({
         <div className="stat-row">
           <span className="stat-label">☠ Poison</span>
           <div className="stat-controls">
-            <button onClick={() => handlePoison(-1)} disabled={busy || isDead}>−</button>
-            <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>{player.poison}</span>
-            <button onClick={() => handlePoison(1)} disabled={busy || isDead}>+</button>
+            <button onClick={() => handlePoison(-1)} disabled={busy || isDead || !canControl}>
+              −
+            </button>
+            <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
+              {player.poison}
+            </span>
+            <button onClick={() => handlePoison(1)} disabled={busy || isDead || !canControl}>
+              +
+            </button>
           </div>
         </div>
 
@@ -292,13 +387,17 @@ function PlayerPanel({
                   <div className="stat-controls">
                     <button
                       onClick={() => handleCmdDamage(source.uid, -1)}
-                      disabled={busy || isDead}
-                    >−</button>
+                      disabled={busy || isDead || !canControl}
+                    >
+                      −
+                    </button>
                     <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>{dmg}</span>
                     <button
                       onClick={() => handleCmdDamage(source.uid, 1)}
-                      disabled={busy || isDead}
-                    >+</button>
+                      disabled={busy || isDead || !canControl}
+                    >
+                      +
+                    </button>
                   </div>
                 </div>
               );
@@ -313,10 +412,40 @@ function PlayerPanel({
             📜 Deck ({player.decklist.length})
           </button>
         )}
-        {!isDead && (
-          <button onClick={handleEliminate} className="btn btn-outline btn-sm btn-danger-outline">
+
+        {/* Eliminate / Revive */}
+        {!isDead && canControl && (
+          <button
+            onClick={handleEliminate}
+            className="btn btn-outline btn-sm btn-danger-outline"
+          >
             Eliminate
           </button>
+        )}
+        {isDead && isHost && (
+          <button onClick={handleRevive} className="btn btn-outline btn-sm btn-accent-outline">
+            ♻️ Revive
+          </button>
+        )}
+
+        {/* Host menu (transfer host) */}
+        {isHost && !isMe && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowHostMenu((v) => !v)}
+              className="btn btn-outline btn-sm"
+              title="Host options"
+            >
+              ⚙️
+            </button>
+            {showHostMenu && (
+              <div className="host-menu">
+                <button onClick={handleTransferHost} className="host-menu-item">
+                  👑 Make Host
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -327,7 +456,15 @@ function PlayerPanel({
  * Decklist Modal
  * ============================================================ */
 
-function DecklistModal({ player, onClose }: { player: SessionPlayer; onClose: () => void }) {
+function DecklistModal({
+  player,
+  onClose,
+  onCardClick,
+}: {
+  player: SessionPlayer;
+  onClose: () => void;
+  onCardClick: (card: { scryfallId?: string; name: string; imageUrl?: string }) => void;
+}) {
   const decklist: Decklist = player.decklist ?? [];
   const [filter, setFilter] = useState('');
 
@@ -360,9 +497,24 @@ function DecklistModal({ player, onClose }: { player: SessionPlayer; onClose: ()
 
         <div className="decklist-grid">
           {filtered.map((entry, i) => (
-            <div key={i} className="decklist-entry">
+            <div
+              key={i}
+              className="decklist-entry decklist-entry-clickable"
+              onClick={() =>
+                onCardClick({
+                  scryfallId: entry.scryfallId,
+                  name: entry.name,
+                  imageUrl: entry.imageUrl,
+                })
+              }
+            >
               {entry.imageUrl ? (
-                <img src={entry.imageUrl} alt={entry.name} className="decklist-thumb" loading="lazy" />
+                <img
+                  src={entry.imageUrl}
+                  alt={entry.name}
+                  className="decklist-thumb"
+                  loading="lazy"
+                />
               ) : (
                 <div className="decklist-thumb decklist-thumb-placeholder" />
               )}
@@ -377,6 +529,186 @@ function DecklistModal({ player, onClose }: { player: SessionPlayer; onClose: ()
 
         {filtered.length === 0 && (
           <p className="text-muted text-center">No cards match "{filter}"</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+ * Card Detail Modal
+ * ============================================================ */
+
+function CardDetailModal({
+  card,
+  onClose,
+}: {
+  card: { scryfallId?: string; name: string; imageUrl?: string };
+  onClose: () => void;
+}) {
+  const [details, setDetails] = useState<ScryfallCard | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      let result: ScryfallCard | null = null;
+      if (card.scryfallId) {
+        result = await getCardById(card.scryfallId);
+      }
+      if (!result) {
+        result = await getCardByName(card.name);
+      }
+      if (!cancelled) {
+        setDetails(result);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [card.scryfallId, card.name]);
+
+  // Use the best available image.
+  const primaryImage =
+    details?.image_uris?.large ??
+    details?.image_uris?.normal ??
+    card.imageUrl ??
+    details?.card_faces?.[0]?.image_uris?.large;
+
+  const hasFaces = details?.card_faces && details.card_faces.length > 1;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content card-detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{details?.name ?? card.name}</h3>
+          <button onClick={onClose} className="btn btn-outline btn-sm">✕</button>
+        </div>
+
+        {loading && (
+          <div className="text-center" style={{ padding: '2rem' }}>
+            <div className="spinner" />
+            <p className="text-muted mt-md">Loading card details…</p>
+          </div>
+        )}
+
+        {!loading && details && (
+          <div className="card-detail-body">
+            {/* Left: image(s) */}
+            <div className="card-detail-images">
+              {primaryImage && (
+                <img
+                  src={primaryImage}
+                  alt={details.name}
+                  className="card-detail-img"
+                />
+              )}
+              {hasFaces && details.card_faces![1]?.image_uris?.large && (
+                <img
+                  src={details.card_faces![1].image_uris.large}
+                  alt={details.card_faces![1].name}
+                  className="card-detail-img"
+                />
+              )}
+            </div>
+
+            {/* Right: text details */}
+            <div className="card-detail-info">
+              {details.mana_cost && (
+                <p className="card-detail-mana">{details.mana_cost}</p>
+              )}
+              <p className="text-muted card-detail-type">{details.type_line}</p>
+              {details.power && details.toughness && (
+                <p style={{ fontWeight: 600 }}>{details.power}/{details.toughness}</p>
+              )}
+              {details.loyalty && (
+                <p style={{ fontWeight: 600 }}>Loyalty: {details.loyalty}</p>
+              )}
+
+              {hasFaces ? (
+                details.card_faces!.map((face, i) => (
+                  <div key={i} className="card-face-block">
+                    <p className="card-face-name">
+                      {face.name}
+                      {face.mana_cost && <span className="card-detail-mana"> {face.mana_cost}</span>}
+                    </p>
+                    <p className="text-muted" style={{ fontSize: '0.85rem' }}>{face.type_line}</p>
+                    <p className="card-detail-oracle">{face.oracle_text}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="card-detail-oracle">{details.oracle_text}</p>
+              )}
+
+              {details.flavor_text && (
+                <p className="card-detail-flavor text-muted">{details.flavor_text}</p>
+              )}
+
+              <div className="card-detail-meta">
+                <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+                  {details.set_name} ({details.set?.toUpperCase()}) ·{' '}
+                  {details.rarity} · #{details.collector_number}
+                </p>
+              </div>
+
+              {/* Prices */}
+              {details.prices && (details.prices.usd || details.prices.usd_foil) && (
+                <div className="card-detail-prices">
+                  {details.prices.usd && (
+                    <span className="badge">Regular: ${details.prices.usd}</span>
+                  )}
+                  {details.prices.usd_foil && (
+                    <span className="badge">Foil: ${details.prices.usd_foil}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Legalities */}
+              {details.legalities && (
+                <div className="card-detail-legalities">
+                  <p className="stat-label" style={{ marginBottom: '0.25rem' }}>Format Legality</p>
+                  <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
+                    {['commander', 'modern', 'standard', 'legacy', 'vintage', 'pioneer'].map((fmt) => {
+                      const status = details.legalities?.[fmt];
+                      if (!status) return null;
+                      return (
+                        <span
+                          key={fmt}
+                          className={`badge ${status === 'legal' ? 'badge-legal' : 'badge-banned'}`}
+                        >
+                          {fmt}: {status}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {details.scryfall_uri && (
+                <a
+                  href={details.scryfall_uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted"
+                  style={{ fontSize: '0.8rem', display: 'inline-block', marginTop: '0.5rem' }}
+                >
+                  View on Scryfall →
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!loading && !details && (
+          <div className="text-center" style={{ padding: '2rem' }}>
+            {primaryImage ? (
+              <img src={primaryImage} alt={card.name} className="card-detail-img" />
+            ) : (
+              <p className="text-muted">Could not load details for "{card.name}".</p>
+            )}
+          </div>
         )}
       </div>
     </div>
