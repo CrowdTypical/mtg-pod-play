@@ -265,7 +265,7 @@ a:hover {
 /* ── Player grid — balanced responsive layout ── */
 .player-grid {
   display: grid;
-  gap: var(--space-sm);
+  gap: var(--space-md);
   flex: 1;
   align-content: start;
 }
@@ -314,14 +314,14 @@ a:hover {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: var(--space-sm);
+  padding: var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   transition: all var(--transition);
   position: relative;
   overflow: hidden;
-  min-height: 280px;
+  min-height: 300px;
 }
 
 /* Commander art background with gradient overlay */
@@ -362,7 +362,7 @@ a:hover {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   height: 100%;
   flex: 1;
   min-height: 0;
@@ -406,7 +406,8 @@ a:hover {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding-top: var(--space-xs);
+  padding-top: var(--space-sm);
+  margin-bottom: var(--space-xs);
 }
 
 .panel-cmd-img {
@@ -461,8 +462,8 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-xs);
-  padding: var(--space-xs) 0;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
 }
 
 .stat-btn {
@@ -558,7 +559,7 @@ a:hover {
 /* ── Quick damage buttons (redesigned) ── */
 .quick-dmg {
   display: flex;
-  gap: 3px;
+  gap: var(--space-xs);
   justify-content: center;
 }
 
@@ -591,10 +592,10 @@ a:hover {
 .panel-stats {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-sm);
   background: rgba(15, 14, 13, 0.5);
   border-radius: var(--radius-md);
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   backdrop-filter: blur(4px);
 }
 
@@ -679,9 +680,9 @@ a:hover {
 /* ── Panel footer (redesigned) ── */
 .panel-footer {
   display: flex;
-  gap: 4px;
+  gap: var(--space-xs);
   margin-top: auto;
-  padding-top: var(--space-xs);
+  padding-top: var(--space-sm);
 }
 
 .panel-footer .btn {
@@ -953,8 +954,8 @@ a:hover {
 .stat-bar-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 0.2rem 0;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
 }
 
 .stat-bar-header {
@@ -1000,8 +1001,8 @@ a:hover {
 .cmd-dmg-bar-row {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 0.2rem 0;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
 }
 
 .cmd-dmg-bar-header {
