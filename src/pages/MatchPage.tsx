@@ -40,6 +40,7 @@ export default function MatchPage() {
     name: string;
     imageUrl?: string;
   } | null>(null);
+  const [logCollapsed, setLogCollapsed] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -146,26 +147,32 @@ export default function MatchPage() {
             cmdDamageFrom={cmdDamage[player.uid] ?? {}}
             players={orderedPlayers}
             sessionId={sessionId!}
+            startingLife={session.startingLife}
             onViewDeck={() => setSelectedDeckUid(player.uid)}
             onAdvanceTurn={() => sessionId && advanceTurn(sessionId)}
           />
         ))}
       </div>
 
-      {/* Event log */}
-      <div className="match-log">
-        <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>Recent Activity</h4>
-        {events.length === 0 ? (
-          <p className="text-muted" style={{ fontSize: '0.85rem' }}>No events yet.</p>
-        ) : (
-          <div className="event-list">
-            {events.map((e) => (
-              <div key={e.id} className="event-item">
-                <span className="event-msg">{e.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Event log (collapsible) */}
+      <div className={`match-log ${logCollapsed ? 'collapsed' : ''}`}>
+        <div className="match-log-header" onClick={() => setLogCollapsed((v) => !v)}>
+          <h4>Recent Activity</h4>
+          <span className="match-log-toggle">▼</span>
+        </div>
+        <div className="match-log-body">
+          {events.length === 0 ? (
+            <p className="text-muted" style={{ fontSize: '0.85rem' }}>No events yet.</p>
+          ) : (
+            <div className="event-list">
+              {events.map((e) => (
+                <div key={e.id} className="event-item">
+                  <span className="event-msg">{e.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* OBS overlay link */}
@@ -211,6 +218,7 @@ function PlayerPanel({
   cmdDamageFrom,
   players,
   sessionId,
+  startingLife,
   onViewDeck,
   onAdvanceTurn,
 }: {
@@ -223,6 +231,7 @@ function PlayerPanel({
   cmdDamageFrom: Record<string, number>;
   players: SessionPlayer[];
   sessionId: string;
+  startingLife: number;
   onViewDeck: () => void;
   onAdvanceTurn: () => void;
 }) {
@@ -281,6 +290,25 @@ function PlayerPanel({
   const name = getDisplayName(player);
   const isDead = player.eliminated || player.health <= 0;
 
+  // Health visual states
+  const healthRatio = player.health / (startingLife || 40);
+  let healthClass = '';
+  if (healthRatio <= 0.15) healthClass = 'health-critical';
+  else if (healthRatio <= 0.35) healthClass = 'health-low';
+
+  // Color identity for the top strip
+  const colors = player.commander?.colors ?? [];
+  const colorMap: Record<string, string> = {
+    W: 'var(--color-w)',
+    U: 'var(--color-u)',
+    B: 'var(--color-b)',
+    R: 'var(--color-r)',
+    G: 'var(--color-g)',
+  };
+
+  // Commander art for panel background
+  const cmdArtUrl = player.commander?.imageUris?.normal ?? player.commander?.imageUris?.large;
+
   // Pass turn button shows on the current turn player's panel.
   // Normal mode: only if it's me. Host mode: only if I'm host.
   const showPassTurn =
@@ -292,12 +320,29 @@ function PlayerPanel({
     <div
       className={`player-panel ${isCurrentTurn ? 'current-turn' : ''} ${isDead ? 'eliminated' : ''} ${isMe ? 'is-me' : ''}`}
     >
+      {/* Color identity strip */}
+      {colors.length > 0 && (
+        <div className="panel-color-strip">
+          {colors.map((c, i) => (
+            <span key={i} style={{ background: colorMap[c] ?? 'var(--color-border)' }} />
+          ))}
+        </div>
+      )}
+
+      {/* Commander art background */}
+      {cmdArtUrl && (
+        <div className="panel-art-bg" style={{ backgroundImage: `url(${cmdArtUrl})` }} />
+      )}
+      <div className="panel-art-overlay" />
+
+      {/* Content wrapper */}
+      <div className="panel-content">
       {/* Header */}
       <div className="panel-header">
         {player.commander?.imageUris ? (
           <img src={player.commander.imageUris.small} alt="" className="panel-cmd-img" />
         ) : (
-          <div className="panel-cmd-img panel-cmd-placeholder" />
+          <div className="panel-cmd-img panel-cmd-placeholder">?</div>
         )}
         <div className="panel-name">
           <div className="flex items-center gap-sm">
@@ -323,13 +368,13 @@ function PlayerPanel({
       <div className="stat-health">
         <button
           onClick={() => handleHealth(-1)}
-          className="stat-btn stat-btn-lg"
+          className="stat-btn stat-btn-lg stat-btn-minus"
           disabled={busy || isDead || !canControl}
         >
           −
         </button>
         <div className="health-display">
-          <span className="health-number">{player.health}</span>
+          <span className={`health-number ${healthClass}`}>{player.health}</span>
           <span className="health-label">Life</span>
         </div>
         <button
@@ -448,6 +493,7 @@ function PlayerPanel({
           </div>
         )}
       </div>
+      </div>{/* end panel-content */}
     </div>
   );
 }
