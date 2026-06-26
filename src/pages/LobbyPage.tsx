@@ -915,18 +915,13 @@ function DiceRollInline({
   // Entry point for the die — starts off the top-right corner of the card
   const [entryPos, setEntryPos] = useState({ x: 170, y: -140 });
 
-  // Sync display number when diceRoll arrives from Firestore
+  // Sync display number when diceRoll arrives from Firestore.
+  // The write is delayed (see handleRoll) so the result arrives right as
+  // the die lands — no extra delay needed.
   useEffect(() => {
     if (diceRoll == null) return;
-    if (rolling) {
-      // Brief delay for dramatic landing effect
-      const timer = setTimeout(() => {
-        setDisplayNum(diceRoll);
-        setRolling(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
     setDisplayNum(diceRoll);
+    setRolling(false);
   }, [diceRoll]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cycle random numbers during rolling for visual effect
@@ -954,13 +949,17 @@ function DiceRollInline({
     setBounceKey((k) => k + 1);
     setRolling(true);
     setDisplayNum(Math.floor(Math.random() * 20) + 1);
-    try {
-      await rollDice(sessionId, uid);
-      // Don't stop rolling here — wait for the subscription to deliver diceRoll.
-    } catch {
-      setRolling(false);
-      setDisplayNum(null);
-    }
+
+    // Delay the Firestore write until the animation finishes (~1.8s) so the
+    // result doesn't appear in the Players section until the die "lands."
+    setTimeout(async () => {
+      try {
+        await rollDice(sessionId, uid);
+      } catch {
+        setRolling(false);
+        setDisplayNum(null);
+      }
+    }, 1800);
   }
 
   // Initial state: show the roll button
