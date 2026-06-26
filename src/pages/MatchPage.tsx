@@ -366,54 +366,68 @@ function PlayerPanel({
 
       {/* Health */}
       <div className="stat-health">
-        <button
-          onClick={() => handleHealth(-1)}
-          className="stat-btn stat-btn-lg stat-btn-minus"
-          disabled={busy || isDead || !canControl}
-        >
-          −
-        </button>
+        {canControl ? (
+          <button
+            onClick={() => handleHealth(-1)}
+            className="stat-btn stat-btn-lg stat-btn-minus"
+            disabled={busy || isDead}
+          >
+            −
+          </button>
+        ) : (
+          <div className="stat-btn-spacer" />
+        )}
         <div className="health-display">
           <span className={`health-number ${healthClass}`}>{player.health}</span>
           <span className="health-label">Life</span>
         </div>
-        <button
-          onClick={() => handleHealth(1)}
-          className="stat-btn stat-btn-lg"
-          disabled={busy || isDead || !canControl}
-        >
-          +
-        </button>
-      </div>
-
-      {/* Quick damage buttons */}
-      <div className="quick-dmg">
-        {[-5, -3, -2, -1].map((n) => (
+        {canControl ? (
           <button
-            key={n}
-            onClick={() => handleHealth(n)}
-            className="quick-dmg-btn"
-            disabled={busy || isDead || !canControl}
+            onClick={() => handleHealth(1)}
+            className="stat-btn stat-btn-lg"
+            disabled={busy || isDead}
           >
-            {n}
+            +
           </button>
-        ))}
+        ) : (
+          <div className="stat-btn-spacer" />
+        )}
       </div>
 
-      {/* Poison & Commander damage */}
+      {/* Quick damage buttons — only for controllable players */}
+      {canControl && !isDead && (
+        <div className="quick-dmg">
+          {[-5, -3, -2, -1].map((n) => (
+            <button
+              key={n}
+              onClick={() => handleHealth(n)}
+              className="quick-dmg-btn"
+              disabled={busy}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Poison & Commander damage — read-only for non-controllable players */}
       <div className="panel-stats">
         <div className="stat-row">
           <span className="stat-label">☠ Poison</span>
           <div className="stat-controls">
-            <button onClick={() => handlePoison(-1)} disabled={busy || isDead || !canControl}>
-              −
-            </button>
-            <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
-              {player.poison}
-            </span>
-            <button onClick={() => handlePoison(1)} disabled={busy || isDead || !canControl}>
-              +
-            </button>
+            {canControl ? (
+              <>
+                <button onClick={() => handlePoison(-1)} disabled={busy || isDead}>−</button>
+                <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
+                  {player.poison}
+                </span>
+                <button onClick={() => handlePoison(1)} disabled={busy || isDead}>+</button>
+              </>
+            ) : (
+              <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
+                {player.poison}
+              </span>
+            )}
           </div>
         </div>
 
@@ -430,19 +444,29 @@ function PlayerPanel({
                     {source.commander?.name?.split(',')[0] ?? getDisplayName(source)}
                   </span>
                   <div className="stat-controls">
-                    <button
-                      onClick={() => handleCmdDamage(source.uid, -1)}
-                      disabled={busy || isDead || !canControl}
-                    >
-                      −
-                    </button>
-                    <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>{dmg}</span>
-                    <button
-                      onClick={() => handleCmdDamage(source.uid, 1)}
-                      disabled={busy || isDead || !canControl}
-                    >
-                      +
-                    </button>
+                    {canControl ? (
+                      <>
+                        <button
+                          onClick={() => handleCmdDamage(source.uid, -1)}
+                          disabled={busy || isDead}
+                        >
+                          −
+                        </button>
+                        <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>
+                          {dmg}
+                        </span>
+                        <button
+                          onClick={() => handleCmdDamage(source.uid, 1)}
+                          disabled={busy || isDead}
+                        >
+                          +
+                        </button>
+                      </>
+                    ) : (
+                      <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>
+                        {dmg}
+                      </span>
+                    )}
                   </div>
                 </div>
               );

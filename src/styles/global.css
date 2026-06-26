@@ -496,6 +496,18 @@ a:hover {
   cursor: not-allowed;
 }
 
+/* Spacer used in place of stat buttons for read-only panels */
+.stat-btn-spacer {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.stat-btn-spacer.stat-btn-lg {
+  width: 56px;
+  height: 56px;
+}
+
 /* Minus button gets danger styling */
 .stat-btn.stat-btn-minus:hover:not(:disabled) {
   border-color: var(--color-danger);
