@@ -860,16 +860,22 @@ function DiceRollInline({
   // Randomized bounce keyframes — regenerated each roll for variety
   const [bounceKey, setBounceKey] = useState(0);
 
-  // Generate chaotic bounce path for dice-tray physics
+  // Generate a zigzag / ricochet path that stays inside the dice-tray bounds.
+  // Tray is 140×100, die is 64px → safe travel is ±38px X, ±18px Y.
+  // We use conservative ±30/±12 so the die never clips the tray edge.
   function genBounces() {
-    const bounces = [];
-    let x = 0, y = 0;
-    for (let i = 0; i < 10; i++) {
-      // Each bounce: random position within tray bounds, decreasing amplitude
-      const decay = 1 - i * 0.08;
-      x = (Math.random() - 0.5) * 60 * decay;
-      y = (Math.random() - 0.5) * 30 * decay;
-      bounces.push({ x, y });
+    const bounces = [{ x: 0, y: 0 }]; // launch from center
+    const maxX = 30;
+    const maxY = 12;
+    const side = Math.random() < 0.5 ? 1 : -1; // randomize first wall
+
+    // Diagonal zigzag: each bounce hits the opposite corner, decaying ~28%/hop.
+    for (let i = 0; i < 7; i++) {
+      const decay = Math.pow(0.72, i);
+      bounces.push({
+        x: side * maxX * decay * (i % 2 === 0 ? 1 : -1),
+        y: maxY * decay * (i % 2 === 0 ? -1 : 1),
+      });
     }
     bounces.push({ x: 0, y: 0 }); // settle center
     return bounces;
