@@ -364,6 +364,8 @@ a:hover {
   flex-direction: column;
   gap: var(--space-xs);
   height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 /* Color identity strip — top accent bar */
@@ -1129,6 +1131,80 @@ a:hover {
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
   flex-shrink: 0;
+}
+
+/* Base badge */
+.badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-input);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.badge-host {
+  background: var(--color-primary);
+  color: #1a1816;
+}
+
+/* Form input */
+.form-input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.form-input:focus {
+  border-color: var(--color-primary);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-dim);
+}
+
+/* Danger outline button */
+.btn-danger-outline {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: transparent;
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: rgba(196, 69, 58, 0.1);
+}
+
+/* Loading screen & spinner */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: var(--space-md);
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* ============================================================

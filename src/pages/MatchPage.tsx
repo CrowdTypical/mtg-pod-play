@@ -375,7 +375,7 @@ function PlayerPanel({
             −
           </button>
         ) : (
-          <div className="stat-btn-spacer" />
+          <div className="stat-btn-spacer stat-btn-lg" />
         )}
         <div className="health-display">
           <span className={`health-number ${healthClass}`}>{player.health}</span>
@@ -390,7 +390,7 @@ function PlayerPanel({
             +
           </button>
         ) : (
-          <div className="stat-btn-spacer" />
+          <div className="stat-btn-spacer stat-btn-lg" />
         )}
       </div>
 
