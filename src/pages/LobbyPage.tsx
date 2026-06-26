@@ -388,8 +388,22 @@ function PlayerRow({
                   </p>
                 </div>
               )}
-              <div className="d20-rank" title={`D20 Roll: ${player.diceRoll}`}>
-                <span className="d20-rank-number">{player.diceRoll}</span>
+              <div className="player-dice-block">
+                <div className="d20-rank" title={`D20 Roll: ${player.diceRoll}`}>
+                  <span className="d20-rank-number">{player.diceRoll}</span>
+                </div>
+                {/* Nudge indicators: 3 boxes showing remaining nudges */}
+                <div className="nudge-indicators" title={`${MAX_NUDGES - (player.nudgesUsed ?? 0)} nudges remaining`}>
+                  {[0, 1, 2].map((i) => {
+                    const used = i < (player.nudgesUsed ?? 0);
+                    return (
+                      <span
+                        key={i}
+                        className={`nudge-box ${used ? 'nudge-box-used' : 'nudge-box-available'}`}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -1077,7 +1091,7 @@ function DiceRollInline({
               className="btn btn-outline btn-sm"
               disabled={nudging}
             >
-              🤏 Nudge ({MAX_NUDGES - nudgesUsed} left)
+              Nudge ({MAX_NUDGES - nudgesUsed} left)
             </button>
           ) : (
             <span className="text-muted" style={{ fontSize: '0.75rem' }}>
