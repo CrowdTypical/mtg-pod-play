@@ -1,0 +1,116 @@
+/* ============================================================
+ * Game Lobby Layout
+ * Sticky code bar + two-column responsive layout.
+ * ============================================================ */
+
+.lobby-container {
+  max-width: 1100px !important;
+}
+
+/* --- Sticky Game Code Bar --- */
+.lobby-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 0.6rem 1rem;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.lobby-sticky-code {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.lobby-sticky-code-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+
+.lobby-sticky-code-value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--color-primary);
+}
+
+.lobby-sticky-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* --- Two-column grid --- */
+.lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.lobby-col-left,
+.lobby-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .lobby-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Merged setup panel sections --- */
+.lobby-setup-section {
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.lobby-setup-section:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.lobby-setup-section-label {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+/* Dice roll inside merged panel */
+.lobby-dice-inline {
+  text-align: center;
+}
+
+.lobby-dice-result {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--color-accent);
+  line-height: 1;
+}
+
+/* --- Players column heading --- */
+.lobby-players-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}

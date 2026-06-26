@@ -25,6 +25,7 @@ import type { CommanderInfo, Session, SessionPlayer } from '@/types';
 import { displayName as getDisplayName } from '@/types';
 import CommanderDetailModal from '@/components/CommanderDetailModal';
 import '@/styles/commander-detail.css';
+import '@/styles/lobby.css';
 
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -146,149 +147,162 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="app-container" style={{ maxWidth: 640 }}>
-      <div className="flex justify-between items-center mb-lg">
-        <div>
-          <Link to="/" className="btn btn-outline btn-sm">← Leave</Link>
-        </div>
+    <div className="app-container lobby-container">
+      {/* --- Header --- */}
+      <div className="flex justify-between items-center mb-md">
+        <Link to="/" className="btn btn-outline btn-sm">← Leave</Link>
         <h1 className="page-title" style={{ margin: 0 }}>Game Lobby</h1>
         <div style={{ width: 80 }} />
       </div>
 
       {error && <p className="form-error text-center mb-md">{error}</p>}
 
-      {/* 1. Game Code */}
-      <div className="card mb-lg">
-        <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.25rem' }}>Game Code</p>
-            <p style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '0.15em' }}>{session.code}</p>
-          </div>
-          <div className="flex gap-sm">
-            <button onClick={handleCopyCode} className="btn btn-outline btn-sm">Copy Code</button>
-            <button onClick={handleCopyLink} className="btn btn-primary btn-sm">Copy Invite Link</button>
-          </div>
+      {/* --- Sticky Game Code Bar --- */}
+      <div className="lobby-sticky-bar">
+        <div className="lobby-sticky-code">
+          <span className="lobby-sticky-code-label">Code</span>
+          <span className="lobby-sticky-code-value">{session.code}</span>
         </div>
-        <div className="mt-md">
-          <p className="text-muted" style={{ fontSize: '0.8rem' }}>Share this link or code with your pod:</p>
-          <code className="text-muted" style={{ fontSize: '0.8rem' }}>{joinUrl}</code>
+        <div className="lobby-sticky-actions">
+          <button onClick={handleCopyCode} className="btn btn-outline btn-sm">📋 Copy Code</button>
+          <button onClick={handleCopyLink} className="btn btn-primary btn-sm">🔗 Invite Link</button>
         </div>
       </div>
 
-      {/* 2. Your Setup (commander + decklist) */}
-      {me && (
-        <MySetupPanel
-          sessionId={sessionId!}
-          player={me}
-        />
-      )}
+      {/* --- Two-column grid --- */}
+      <div className="lobby-grid">
+        {/* LEFT: Your Setup (merged: commander + decklist + dice roll + ready) */}
+        <div className="lobby-col-left">
+          {me && (
+            <div className="card">
+              <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
 
-      {/* 3. Roll for Turn Order */}
-      {me && (
-        <DiceRollSection sessionId={sessionId!} uid={me.uid} diceRoll={me.diceRoll ?? null} />
-      )}
+              {/* Commander + Decklist */}
+              <MySetupPanel
+                sessionId={sessionId!}
+                player={me}
+                bare={true}
+              />
 
-      {/* 4. Mark As Ready (only clickable when roll is done) */}
-      {me && (
-        <ReadySection
-          sessionId={sessionId!}
-          uid={me.uid}
-          isReady={me.isReady}
-          hasRolled={me.diceRoll != null}
-        />
-      )}
+              {/* Dice Roll */}
+              <div className="lobby-setup-section mt-md">
+                <p className="lobby-setup-section-label">🎲 Roll for Turn Order</p>
+                <DiceRollInline
+                  sessionId={sessionId!}
+                  uid={me.uid}
+                  diceRoll={me.diceRoll ?? null}
+                />
+              </div>
 
-      {/* 5. Players */}
-      <div className="mb-lg">
-        <div className="flex justify-between items-center mb-md">
-          <h3 style={{ margin: 0 }}>
-            Players ({players.length}/{session.maxPlayers})
-          </h3>
-          {anyRolled && (
-            <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-              Sorted by roll ↓
-            </span>
+              {/* Ready Toggle */}
+              <div className="lobby-setup-section mt-md">
+                <p className="lobby-setup-section-label">✓ Ready Check</p>
+                <ReadyToggle
+                  sessionId={sessionId!}
+                  uid={me.uid}
+                  isReady={me.isReady}
+                  hasRolled={me.diceRoll != null}
+                />
+              </div>
+            </div>
           )}
         </div>
-        <div className="flex flex-col gap-sm">
-          <AnimatePresence mode="popLayout">
-            {sortedPlayers.map((p, idx) => (
-              <motion.div
-                key={p.uid}
-                layout
-                layoutId={`player-${p.uid}`}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{
-                  layout: { type: 'spring', stiffness: 400, damping: 35 },
-                  duration: 0.2,
-                }}
+
+        {/* RIGHT: Players + Host Controls */}
+        <div className="lobby-col-right">
+          {/* Players */}
+          <div className="card">
+            <div className="lobby-players-header">
+              <h3 style={{ margin: 0 }}>
+                Players ({players.length}/{session.maxPlayers})
+              </h3>
+              {anyRolled && (
+                <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                  Sorted by roll ↓
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-sm">
+              <AnimatePresence mode="popLayout">
+                {sortedPlayers.map((p, idx) => (
+                  <motion.div
+                    key={p.uid}
+                    layout
+                    layoutId={`player-${p.uid}`}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{
+                      layout: { type: 'spring', stiffness: 400, damping: 35 },
+                      duration: 0.2,
+                    }}
+                  >
+                    <PlayerRow player={p} rank={p.diceRoll != null ? idx + 1 : null} />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              {players.length < session.maxPlayers && (
+                <div className="text-center text-muted" style={{ padding: '1rem', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                  Waiting for more players to join…
+                </div>
+              )}
+            </div>
+
+            {/* Turn order preview */}
+            {turnOrder.length > 1 && (
+              <div className="mt-md">
+                <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  Turn Order:
+                </p>
+                <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
+                  {turnOrder.map((uid, i) => {
+                    const p = players.find((pl) => pl.uid === uid);
+                    return p ? (
+                      <span key={uid} className="turn-badge">
+                        {i + 1}. {getDisplayName(p)}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Host Launch Controls */}
+          {isHost && (
+            <div className="card text-center">
+              <div className="flex justify-between items-center mb-md">
+                <h3 style={{ margin: 0 }}>Launch Game</h3>
+                <span className={`badge ${allReady ? 'badge-ready' : 'badge-loss'}`} style={allReady ? {} : { background: 'var(--color-danger)', color: '#fff' }}>
+                  {readyCount}/{players.length} ready
+                </span>
+              </div>
+              {anyRolled && (
+                <button
+                  onClick={handleResetRolls}
+                  className="btn btn-outline btn-sm"
+                  disabled={resetting}
+                  style={{ marginBottom: '1rem' }}
+                >
+                  {resetting ? 'Resetting…' : '↻ Reset All Dice Rolls'}
+                </button>
+              )}
+              <button
+                onClick={handleStart}
+                className="btn btn-primary btn-lg btn-block"
+                disabled={!allReady}
               >
-                <PlayerRow player={p} rank={p.diceRoll != null ? idx + 1 : null} />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          {players.length < session.maxPlayers && (
-            <div className="card text-center text-muted" style={{ padding: '1rem', borderStyle: 'dashed' }}>
-              Waiting for more players to join…
+                {allReady ? 'Start Game' : 'Waiting for all players to be ready…'}
+              </button>
+              {!allReady && (
+                <p className="text-muted mt-sm" style={{ fontSize: '0.85rem' }}>
+                  All players must hit "Ready" first.
+                </p>
+              )}
             </div>
           )}
         </div>
-
-        {/* Turn order preview */}
-        {turnOrder.length > 1 && (
-          <div className="mt-md">
-            <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-              Turn Order:
-            </p>
-            <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
-              {turnOrder.map((uid, i) => {
-                const p = players.find((pl) => pl.uid === uid);
-                return p ? (
-                  <span key={uid} className="turn-badge">
-                    {i + 1}. {getDisplayName(p)}
-                  </span>
-                ) : null;
-              })}
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* 6. Game Launchers (host only) */}
-      {isHost && (
-        <div className="card mt-lg text-center">
-          <div className="flex justify-between items-center mb-md">
-            <h3 style={{ margin: 0 }}>Launch Game</h3>
-            <span className={`badge ${allReady ? 'badge-ready' : 'badge-loss'}`} style={allReady ? {} : { background: 'var(--color-danger)', color: '#fff' }}>
-              {readyCount}/{players.length} ready
-            </span>
-          </div>
-          {anyRolled && (
-            <button
-              onClick={handleResetRolls}
-              className="btn btn-outline btn-sm"
-              disabled={resetting}
-              style={{ marginBottom: '1rem' }}
-            >
-              {resetting ? 'Resetting…' : '↻ Reset All Dice Rolls'}
-            </button>
-          )}
-          <button
-            onClick={handleStart}
-            className="btn btn-primary btn-lg btn-block"
-            disabled={!allReady}
-          >
-            {allReady ? 'Start Game' : 'Waiting for all players to be ready…'}
-          </button>
-          {!allReady && (
-            <p className="text-muted mt-sm" style={{ fontSize: '0.85rem' }}>
-              All players must hit "Ready" first.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -531,9 +545,11 @@ function CommanderPicker({
 function MySetupPanel({
   sessionId,
   player,
+  bare = false,
 }: {
   sessionId: string;
   player: SessionPlayer;
+  bare?: boolean;
 }) {
   const { user } = useAuth();
   const [showDeckImport, setShowDeckImport] = useState(false);
@@ -587,10 +603,8 @@ function MySetupPanel({
     await setPlayerDecklist(sessionId, uid, null, null, null);
   }
 
-  return (
-    <div className="card mb-lg">
-      <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
-
+  const inner = (
+    <>
       {/* Commander — visual picker */}
       <div className="form-group">
         <label className="form-label">Your Commander</label>
@@ -659,15 +673,24 @@ function MySetupPanel({
           </button>
         )}
       </div>
+    </>
+  );
+
+  if (bare) return inner;
+
+  return (
+    <div className="card mb-lg">
+      <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
+      {inner}
     </div>
   );
 }
 
 /* ============================================================
- * Dice Roll Section (separate from setup)
+ * Dice Roll Inline (embedded in setup panel)
  * ============================================================ */
 
-function DiceRollSection({
+function DiceRollInline({
   sessionId,
   uid,
   diceRoll,
@@ -688,13 +711,10 @@ function DiceRollSection({
   }
 
   return (
-    <div className="card mb-lg text-center">
-      <label className="form-label">Roll for Turn Order</label>
+    <div className="lobby-dice-inline">
       {diceRoll != null ? (
         <div>
-          <p style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--color-accent)', lineHeight: 1 }}>
-            {diceRoll}
-          </p>
+          <p className="lobby-dice-result">{diceRoll}</p>
           <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
             You rolled a {diceRoll}. Ask the host to reset if needed.
           </p>
@@ -709,10 +729,10 @@ function DiceRollSection({
 }
 
 /* ============================================================
- * Ready Section (only clickable after dice roll)
+ * Ready Toggle (embedded in setup panel)
  * ============================================================ */
 
-function ReadySection({
+function ReadyToggle({
   sessionId,
   uid,
   isReady,
@@ -735,7 +755,7 @@ function ReadySection({
   }
 
   return (
-    <div className="card mb-lg">
+    <div>
       <button
         onClick={handleToggleReady}
         className={`btn btn-lg btn-block ${isReady ? 'btn-primary' : 'btn-outline'}`}
