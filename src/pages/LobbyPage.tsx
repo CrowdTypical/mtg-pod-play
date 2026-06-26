@@ -857,6 +857,26 @@ function DiceRollInline({
 }) {
   const [rolling, setRolling] = useState(false);
   const [displayNum, setDisplayNum] = useState<number | null>(null);
+  // Randomized bounce keyframes — regenerated each roll for variety
+  const [bounceKey, setBounceKey] = useState(0);
+
+  // Generate chaotic bounce path for dice-tray physics
+  function genBounces() {
+    const bounces = [];
+    let x = 0, y = 0;
+    for (let i = 0; i < 10; i++) {
+      // Each bounce: random position within tray bounds, decreasing amplitude
+      const decay = 1 - i * 0.08;
+      x = (Math.random() - 0.5) * 60 * decay;
+      y = (Math.random() - 0.5) * 30 * decay;
+      bounces.push({ x, y });
+    }
+    bounces.push({ x: 0, y: 0 }); // settle center
+    return bounces;
+  }
+
+  const [bounces, setBounces] = useState(genBounces());
+  const [rotations, setRotations] = useState<number[]>([]);
 
   // Sync display number when diceRoll arrives from Firestore
   useEffect(() => {
@@ -866,7 +886,7 @@ function DiceRollInline({
       const timer = setTimeout(() => {
         setDisplayNum(diceRoll);
         setRolling(false);
-      }, 400);
+      }, 500);
       return () => clearTimeout(timer);
     }
     setDisplayNum(diceRoll);
@@ -877,11 +897,21 @@ function DiceRollInline({
     if (!rolling) return;
     const interval = setInterval(() => {
       setDisplayNum(Math.floor(Math.random() * 20) + 1);
-    }, 80);
+    }, 70);
     return () => clearInterval(interval);
   }, [rolling]);
 
   async function handleRoll() {
+    // Generate new chaotic bounce path + rotations for this roll
+    setBounces(genBounces());
+    setRotations([
+      Math.random() * 720 - 360,
+      Math.random() * 720 - 360,
+      Math.random() * 720 - 360,
+      Math.random() * 360 - 180,
+      0,
+    ]);
+    setBounceKey((k) => k + 1);
     setRolling(true);
     setDisplayNum(Math.floor(Math.random() * 20) + 1);
     try {
@@ -904,28 +934,72 @@ function DiceRollInline({
     );
   }
 
+  // Build keyframe arrays for framer-motion
+  const xKeys = bounces.map((b) => b.x);
+  const yKeys = bounces.map((b) => b.y);
+  const rotKeys = rotations.length > 0 ? rotations : [0, 0, 0, 0, 0];
+  const scaleKeys = [1, 1.15, 0.9, 1.1, 0.95, 1.05, 1];
+
   return (
     <div className="lobby-dice-inline">
-      {/* D20 — spins in from the right, wobbles while rolling */}
-      <motion.div
-        initial={{ x: 300, opacity: 0, rotate: 180, scale: 0.3 }}
-        animate={{ x: 0, opacity: 1, rotate: 0, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-      >
+      {/* Dice Tray — bounded area where the die tumbles */}
+      <div className="dice-tray">
+        {/* The D20 die — bounces around chaotically, tumbles in 3D */}
         <motion.div
-          className="d20-die"
-          animate={rolling ? { rotate: [-8, 8, -8] } : { rotate: 0 }}
+          key={bounceKey}
+          className="d20-die-wrapper"
+          initial={{ x: 0, y: 0, opacity: 1 }}
+          animate={
+            rolling
+              ? {
+                  x: xKeys,
+                  y: yKeys,
+                  scale: scaleKeys,
+                }
+              : { x: 0, y: 0, scale: 1 }
+          }
           transition={
             rolling
-              ? { repeat: Infinity, duration: 0.3, ease: 'easeInOut' }
-              : { type: 'spring', stiffness: 300, damping: 15 }
+              ? {
+                  duration: 1.8,
+                  times: xKeys.map((_, i) => i / (xKeys.length - 1)),
+                  ease: 'easeInOut',
+                }
+              : { type: 'spring', stiffness: 500, damping: 12 }
           }
         >
-          <div className="d20-face">
-            <span className="d20-number">{displayNum ?? '?'}</span>
-          </div>
+          <motion.div
+            className="d20-die"
+            initial={{ rotateX: 0, rotateY: 0, rotateZ: 0 }}
+            animate={
+              rolling
+                ? { rotateX: rotKeys, rotateY: rotKeys, rotateZ: rotKeys }
+                : { rotateX: 0, rotateY: 0, rotateZ: 0 }
+            }
+            transition={
+              rolling
+                ? { duration: 1.8, ease: 'easeOut' }
+                : { type: 'spring', stiffness: 400, damping: 15 }
+            }
+            style={{ transformStyle: 'preserve-3d' }}
+          >
+            <div className="d20-face">
+              <span className="d20-number">{displayNum ?? '?'}</span>
+            </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+
+        {/* Tray floor shadow — scales/bounces with the die */}
+        <motion.div
+          className="dice-tray-shadow"
+          animate={
+            rolling
+              ? { scaleX: [1, 1.3, 0.8, 1.2, 1], opacity: [0.4, 0.2, 0.5, 0.3, 0.4] }
+              : { scaleX: 1, opacity: 0.4 }
+          }
+          transition={rolling ? { duration: 1.8, ease: 'easeInOut' } : {}}
+        />
+      </div>
 
       {rolling && (
         <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
