@@ -25,6 +25,7 @@ import type {
   SessionPlayer,
 } from '@/types';
 import { displayName as getDisplayName } from '@/types';
+import '@/styles/playboard.css';
 
 export default function MatchPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
