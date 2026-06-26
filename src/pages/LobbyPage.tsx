@@ -23,6 +23,8 @@ import {
 } from '@/lib/scryfall';
 import type { CommanderInfo, Session, SessionPlayer } from '@/types';
 import { displayName as getDisplayName } from '@/types';
+import CommanderDetailModal from '@/components/CommanderDetailModal';
+import '@/styles/commander-detail.css';
 
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -403,6 +405,7 @@ function CommanderPicker({
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CommanderInfo[]>([]);
   const [searching, setSearching] = useState(false);
+  const [previewCommander, setPreviewCommander] = useState<CommanderInfo | null>(null);
 
   useEffect(() => {
     if (!query.trim() || currentCommander) {
@@ -427,6 +430,7 @@ function CommanderPicker({
     await setPlayerCommander(sessionId, uid, c);
     setQuery('');
     setResults([]);
+    setPreviewCommander(null);
   }
 
   async function handleClear() {
@@ -489,7 +493,7 @@ function CommanderPicker({
           {results.map((c) => (
             <button
               key={c.scryfallId}
-              onClick={() => handleSelect(c)}
+              onClick={() => setPreviewCommander(c)}
               className="commander-grid-item"
             >
               {c.imageUris?.small ? (
@@ -506,6 +510,15 @@ function CommanderPicker({
             </button>
           ))}
         </div>
+      )}
+
+      {/* Commander detail / art picker modal */}
+      {previewCommander && (
+        <CommanderDetailModal
+          commander={previewCommander}
+          onClose={() => setPreviewCommander(null)}
+          onChoose={handleSelect}
+        />
       )}
     </div>
   );

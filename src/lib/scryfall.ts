@@ -1,4 +1,4 @@
-import type { CommanderInfo, Decklist, DecklistEntry, ScryfallCard } from '@/types';
+import type { CommanderInfo, Decklist, DecklistEntry, ScryfallCard, ScryfallRuling } from '@/types';
 
 /**
  * Scryfall API client.
@@ -90,6 +90,37 @@ export async function getCardById(scryfallId: string): Promise<ScryfallCard | nu
     return await scryfallFetch<ScryfallCard>(`/cards/${scryfallId}`);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch all prints (different art editions) of a card by its Scryfall ID.
+ * Used by the commander picker to let users choose their preferred art.
+ * Returns the full ScryfallCard objects so we can grab image URIs + set info.
+ */
+export async function getCardPrints(scryfallId: string): Promise<ScryfallCard[]> {
+  try {
+    const data = await scryfallFetch<ScryfallSearchResponse>(
+      `/cards/${scryfallId}/prints`,
+    );
+    return data.data;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch official rulings (notes/rules clarifications) for a card.
+ * Returns objects with a `comment` field containing the ruling text.
+ */
+export async function getCardRulings(scryfallId: string): Promise<ScryfallRuling[]> {
+  try {
+    const data = await scryfallFetch<{ data: ScryfallRuling[] }>(
+      `/cards/${scryfallId}/rulings`,
+    );
+    return data.data ?? [];
+  } catch {
+    return [];
   }
 }
 

@@ -337,12 +337,23 @@ a:hover {
 }
 
 .spinner {
+  display: inline-block;
   width: 40px;
   height: 40px;
   border: 3px solid var(--color-border);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* Small spinner — for inline use inside buttons/labels.
+   Keeps the element from expanding its container. */
+.spinner-sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
 }
 
 @keyframes spin {

@@ -15,6 +15,8 @@ import {
   searchCommanders,
 } from '@/lib/scryfall';
 import type { CommanderInfo, Decklist } from '@/types';
+import CommanderDetailModal from '@/components/CommanderDetailModal';
+import '@/styles/commander-detail.css';
 
 type ImportMode = 'paste' | 'archidekt' | 'none';
 
@@ -28,6 +30,7 @@ export default function JoinPage() {
   const [commanderQuery, setCommanderQuery] = useState('');
   const [commanderResults, setCommanderResults] = useState<CommanderInfo[]>([]);
   const [selectedCommander, setSelectedCommander] = useState<CommanderInfo | null>(null);
+  const [previewCommander, setPreviewCommander] = useState<CommanderInfo | null>(null);
   const [searching, setSearching] = useState(false);
 
   const [importMode, setImportMode] = useState<ImportMode>('none');
@@ -224,7 +227,7 @@ export default function JoinPage() {
                   {commanderResults.map((c) => (
                     <button
                       key={c.scryfallId}
-                      onClick={() => setSelectedCommander(c)}
+                      onClick={() => setPreviewCommander(c)}
                       className="commander-result"
                     >
                       {c.imageUris && (
@@ -328,6 +331,20 @@ export default function JoinPage() {
           {joining ? 'Joining…' : 'Join Game'}
         </button>
       </div>
+
+      {/* Commander detail / art picker modal */}
+      {previewCommander && (
+        <CommanderDetailModal
+          commander={previewCommander}
+          onClose={() => setPreviewCommander(null)}
+          onChoose={(c) => {
+            setSelectedCommander(c);
+            setPreviewCommander(null);
+            setCommanderQuery('');
+            setCommanderResults([]);
+          }}
+        />
+      )}
     </div>
   );
 }

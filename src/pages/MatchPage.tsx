@@ -15,17 +15,20 @@ import {
   subscribeToPlayers,
   subscribeToSession,
 } from '@/services/sessionService';
-import { getCardById, getCardByName } from '@/lib/scryfall';
+import { getCardById, getCardByName, getCardRulings } from '@/lib/scryfall';
+import FormatLegalities from '@/components/FormatLegalities';
 import type {
   CommanderDamageMap,
   Decklist,
   ScryfallCard,
+  ScryfallRuling,
   Session,
   SessionEvent,
   SessionPlayer,
 } from '@/types';
 import { displayName as getDisplayName } from '@/types';
 import '@/styles/playboard.css';
+import '@/styles/commander-detail.css';
 
 export default function MatchPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -694,11 +697,13 @@ function CardDetailModal({
   onClose: () => void;
 }) {
   const [details, setDetails] = useState<ScryfallCard | null>(null);
+  const [rulings, setRulings] = useState<ScryfallRuling[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setRulings([]);
     (async () => {
       let result: ScryfallCard | null = null;
       if (card.scryfallId) {
@@ -710,6 +715,12 @@ function CardDetailModal({
       if (!cancelled) {
         setDetails(result);
         setLoading(false);
+        // Fetch rulings using the canonical Scryfall ID for accuracy.
+        const id = result?.id ?? card.scryfallId;
+        if (id) {
+          const r = await getCardRulings(id);
+          if (!cancelled) setRulings(r);
+        }
       }
     })();
     return () => {
@@ -812,23 +823,25 @@ function CardDetailModal({
                 </div>
               )}
 
-              {/* Legalities */}
+              {/* Legalities — compact pill badge layout */}
               {details.legalities && (
-                <div className="card-detail-legalities">
-                  <p className="stat-label" style={{ marginBottom: '0.25rem' }}>Format Legality</p>
-                  <div className="flex gap-xs" style={{ flexWrap: 'wrap' }}>
-                    {['commander', 'modern', 'standard', 'legacy', 'vintage', 'pioneer'].map((fmt) => {
-                      const status = details.legalities?.[fmt];
-                      if (!status) return null;
-                      return (
-                        <span
-                          key={fmt}
-                          className={`badge ${status === 'legal' ? 'badge-legal' : 'badge-banned'}`}
-                        >
-                          {fmt}: {status}
-                        </span>
-                      );
-                    })}
+                <FormatLegalities legalities={details.legalities} />
+              )}
+
+              {/* Rulings / Notes */}
+              {rulings.length > 0 && (
+                <div className="card-detail-section">
+                  <p className="card-detail-section-title">📝 Rulings & Notes</p>
+                  <div className="rulings-list">
+                    {rulings.map((r) => (
+                      <div key={r.oracle_id} className="ruling-item">
+                        <div className="ruling-date">
+                          {r.published_at}
+                          <span className="ruling-source">{r.source}</span>
+                        </div>
+                        {r.comment}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

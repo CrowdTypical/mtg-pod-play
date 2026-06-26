@@ -59,6 +59,15 @@ export interface ScryfallCard {
   rulings_uri?: string;
 }
 
+/** A Scryfall ruling — official rules clarification/note for a card. */
+export interface ScryfallRuling {
+  object: 'ruling';
+  oracle_id: string;
+  source: string; // e.g. 'wotg' or policy
+  published_at: string; // ISO date
+  comment: string;
+}
+
 export interface CommanderInfo {
   scryfallId: string;
   name: string;
