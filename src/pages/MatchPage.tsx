@@ -17,6 +17,7 @@ import {
 } from '@/services/sessionService';
 import { getCardById, getCardByName, getCardRulings } from '@/lib/scryfall';
 import FormatLegalities from '@/components/FormatLegalities';
+import SetupEditor from '@/components/SetupEditor';
 import type {
   CommanderDamageMap,
   Decklist,
@@ -45,6 +46,7 @@ export default function MatchPage() {
     imageUrl?: string;
   } | null>(null);
   const [logCollapsed, setLogCollapsed] = useState(false);
+  const [editingSetupUid, setEditingSetupUid] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -172,6 +174,7 @@ export default function MatchPage() {
             startingLife={session.startingLife}
             onViewDeck={() => setSelectedDeckUid(player.uid)}
             onAdvanceTurn={() => sessionId && advanceTurn(sessionId)}
+            onEditSetup={() => setEditingSetupUid(player.uid)}
           />
         ))}
       </div>
@@ -223,6 +226,15 @@ export default function MatchPage() {
       {focusedCard && (
         <CardDetailModal card={focusedCard} onClose={() => setFocusedCard(null)} />
       )}
+
+      {/* Setup editor modal (change commander/decklist mid-game) */}
+      {editingSetupUid && (
+        <SetupEditor
+          sessionId={sessionId!}
+          player={orderedPlayers.find((p) => p.uid === editingSetupUid)!}
+          onClose={() => setEditingSetupUid(null)}
+        />
+      )}
     </div>
   );
 }
@@ -266,6 +278,7 @@ function PlayerPanel({
   startingLife,
   onViewDeck,
   onAdvanceTurn,
+  onEditSetup,
 }: {
   player: SessionPlayer;
   isCurrentTurn: boolean;
@@ -279,6 +292,7 @@ function PlayerPanel({
   startingLife: number;
   onViewDeck: () => void;
   onAdvanceTurn: () => void;
+  onEditSetup: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [showHostMenu, setShowHostMenu] = useState(false);
@@ -559,6 +573,13 @@ function PlayerPanel({
           {player.decklist && player.decklist.length > 0 && (
             <button onClick={onViewDeck} className="btn btn-outline btn-sm">
               📜 Deck ({player.decklist.length})
+            </button>
+          )}
+
+          {/* Edit Setup (commander/decklist) — available to controlling user */}
+          {canControl && (
+            <button onClick={onEditSetup} className="btn btn-outline btn-sm">
+              ✏️ Edit Setup
             </button>
           )}
 

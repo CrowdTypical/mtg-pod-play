@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { getCardPrints } from '@/lib/scryfall';
-import type { CommanderInfo, ScryfallCard } from '@/types';
+import FormatLegalities from './FormatLegalities';
+import { getCardPrints, getCardRulings } from '@/lib/scryfall';
+import type { CommanderInfo, ScryfallCard, ScryfallRuling } from '@/types';
 
 /**
  * Shared commander detail modal.
@@ -26,6 +27,10 @@ export default function CommanderDetailModal({
   const [selectedPrint, setSelectedPrint] = useState<ScryfallCard | null>(null);
   const [loadingPrints, setLoadingPrints] = useState(true);
 
+  // Card details (for legalities) and rulings for the selected print.
+  const [rulings, setRulings] = useState<ScryfallRuling[]>([]);
+  const [loadingRulings, setLoadingRulings] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoadingPrints(true);
@@ -42,6 +47,24 @@ export default function CommanderDetailModal({
       cancelled = true;
     };
   }, [commander.scryfallId]);
+
+  // Fetch rulings whenever the user selects a different print.
+  useEffect(() => {
+    if (!selectedPrint) return;
+    let cancelled = false;
+    setLoadingRulings(true);
+    setRulings([]);
+    (async () => {
+      const r = await getCardRulings(selectedPrint.id);
+      if (!cancelled) {
+        setRulings(r);
+        setLoadingRulings(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPrint?.id]);
 
   // The art to display in the big preview pane.
   const displayImage =
@@ -159,6 +182,32 @@ export default function CommanderDetailModal({
                 </div>
               )}
             </div>
+
+            {/* Format Legalities */}
+            {selectedPrint?.legalities && (
+              <FormatLegalities legalities={selectedPrint.legalities} />
+            )}
+
+            {/* Rulings / Notes */}
+            {(loadingRulings || rulings.length > 0) && (
+              <div className="card-detail-section">
+                <p className="card-detail-section-title">
+                  📝 Rulings & Notes
+                  {loadingRulings && <span className="text-muted" style={{ fontWeight: 400 }}> (loading…)</span>}
+                </p>
+                <div className="rulings-list">
+                  {rulings.map((r) => (
+                    <div key={r.oracle_id} className="ruling-item">
+                      <div className="ruling-date">
+                        {r.published_at}
+                        <span className="ruling-source">{r.source}</span>
+                      </div>
+                      {r.comment}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Choose button */}
             <button

@@ -553,6 +553,7 @@ function MySetupPanel({
 }) {
   const { user } = useAuth();
   const [showDeckImport, setShowDeckImport] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
   const [decklistText, setDecklistText] = useState('');
   const [archidektUrl, setArchidektUrl] = useState('');
   const [importing, setImporting] = useState(false);
@@ -636,34 +637,69 @@ function MySetupPanel({
         ) : showDeckImport ? (
           <div>
             {importError && <p className="form-error mb-sm">{importError}</p>}
-            <div className="flex gap-sm mb-sm">
+
+            {/* Mode switch */}
+            <div className="flex items-center gap-sm mb-sm" style={{ fontSize: '0.8rem' }}>
+              <span className="text-muted">Import mode:</span>
+              <button
+                type="button"
+                onClick={() => setManualMode(false)}
+                className={`btn btn-xs ${!manualMode ? 'btn-primary' : 'btn-outline'}`}
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+              >
+                🔗 URL
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualMode(true)}
+                className={`btn btn-xs ${manualMode ? 'btn-primary' : 'btn-outline'}`}
+                style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+              >
+                ✍️ Manual Text
+              </button>
+            </div>
+
+            {/* URL mode (default) */}
+            {!manualMode && (
+              <input
+                type="url"
+                className="form-input mb-sm"
+                value={archidektUrl}
+                onChange={(e) => setArchidektUrl(e.target.value)}
+                placeholder="Archidekt / decklist URL…"
+              />
+            )}
+
+            {/* Manual mode */}
+            {manualMode && (
               <textarea
-                className="form-input"
+                className="form-input mb-sm"
                 value={decklistText}
                 onChange={(e) => setDecklistText(e.target.value)}
-                placeholder="Paste decklist…"
-                rows={4}
+                placeholder={"Paste decklist (one card per line):\n1 Sol Ring\n1 Arcane Signet\n…"}
+                rows={5}
                 style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
               />
-            </div>
-            <input
-              type="url"
-              className="form-input mb-sm"
-              value={archidektUrl}
-              onChange={(e) => setArchidektUrl(e.target.value)}
-              placeholder="…or Archidekt URL"
-            />
+            )}
+
             <div className="flex gap-sm">
-              <button onClick={handleImportPaste} className="btn btn-primary btn-sm" disabled={importing || !decklistText.trim()}>
-                Import Text
-              </button>
-              <button onClick={handleImportArchidekt} className="btn btn-primary btn-sm" disabled={importing || !archidektUrl.trim()}>
-                {importing ? (
-                  <span className="flex items-center gap-sm">
-                    <span className="spinner spinner-sm" /> Importing…
-                  </span>
-                ) : 'Import URL'}
-              </button>
+              {!manualMode ? (
+                <button onClick={handleImportArchidekt} className="btn btn-primary btn-sm" disabled={importing || !archidektUrl.trim()}>
+                  {importing ? (
+                    <span className="flex items-center gap-sm">
+                      <span className="spinner spinner-sm" /> Importing…
+                    </span>
+                  ) : 'Import URL'}
+                </button>
+              ) : (
+                <button onClick={handleImportPaste} className="btn btn-primary btn-sm" disabled={importing || !decklistText.trim()}>
+                  {importing ? (
+                    <span className="flex items-center gap-sm">
+                      <span className="spinner spinner-sm" /> Importing…
+                    </span>
+                  ) : 'Import Text'}
+                </button>
+              )}
               <button onClick={() => setShowDeckImport(false)} className="btn btn-outline btn-sm">Cancel</button>
             </div>
           </div>

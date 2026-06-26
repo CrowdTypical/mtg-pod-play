@@ -1,12 +1,15 @@
 /**
  * Compact format legality display.
  *
- * Renders each format as a small pill/badge with the format name and a
- * colored status indicator — similar to the Scryfall / MTGGoldfish style:
+ * Renders each format as a grid cell with the format name and a colored
+ * status label, similar to the Scryfall legality panel:
  *
- *   [Commander ✓] [Modern ✓] [Standard ✗] [Legacy ✓] ...
+ *   ┌──────────────┬──────────────┐
+ *   │ Standard  ✓  │ Modern   ✗   │
+ *   │ Commander ✓  │ Legacy   ✓   │
+ *   └──────────────┴──────────────┘
  *
- * Legal statuses are colour-coded:
+ * Statuses are colour-coded:
  *   - legal      → green
  *   - not legal  → grey
  *   - banned     → red
@@ -83,21 +86,21 @@ export default function FormatLegalities({
   return (
     <div className="card-detail-section">
       <p className="card-detail-section-title">📋 Format Legality</p>
-      <div className="format-legalities">
+      <div className="legalities-grid">
         {formats.map((fmt) => {
           const status = legalities[fmt];
           const info = statusInfo(status);
           return (
-            <span
+            <div
               key={fmt}
-              className={`format-legality-pill ${info.cls}`}
+              className={`legality-cell legality-${info.cls}`}
               title={`${FORMAT_LABELS[fmt] ?? fmt}: ${info.label}`}
             >
-              <span className="format-legality-icon">{info.icon}</span>
-              <span className="format-legality-name">
-                {FORMAT_LABELS[fmt] ?? fmt}
+              <span className="legality-format">{FORMAT_LABELS[fmt] ?? fmt}</span>
+              <span className="legality-status">
+                {info.icon} {info.label}
               </span>
-            </span>
+            </div>
           );
         })}
       </div>
