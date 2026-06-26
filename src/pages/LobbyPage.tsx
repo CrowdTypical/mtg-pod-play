@@ -902,15 +902,12 @@ function DiceRollInline({
   }, [rolling]);
 
   async function handleRoll() {
-    // Generate new chaotic bounce path + rotations for this roll
+    // Generate new chaotic bounce path + 2D spin for this roll
     setBounces(genBounces());
-    setRotations([
-      Math.random() * 720 - 360,
-      Math.random() * 720 - 360,
-      Math.random() * 720 - 360,
-      Math.random() * 360 - 180,
-      0,
-    ]);
+    // Single cumulative spin value — many full turns, lands at random angle
+    const spinTurns = 3 + Math.floor(Math.random() * 3); // 3–5 full turns
+    const finalAngle = Math.random() * 360;
+    setRotations([spinTurns * 360 + finalAngle]);
     setBounceKey((k) => k + 1);
     setRolling(true);
     setDisplayNum(Math.floor(Math.random() * 20) + 1);
@@ -935,28 +932,37 @@ function DiceRollInline({
   }
 
   // Build keyframe arrays for framer-motion
+  // 2D approach: flat die spins (rotate Z) + squash/stretch on bounces
   const xKeys = bounces.map((b) => b.x);
   const yKeys = bounces.map((b) => b.y);
-  const rotKeys = rotations.length > 0 ? rotations : [0, 0, 0, 0, 0];
-  const scaleKeys = [1, 1.15, 0.9, 1.1, 0.95, 1.05, 1];
+
+  // Squash/stretch: alternate between wide-short and narrow-tall
+  // at each bounce point to simulate impact deformation.
+  // Framer Motion needs separate arrays per property.
+  const scaleXKeys = bounces.map((_, i) => {
+    if (i === bounces.length - 1) return 1;
+    return i % 2 === 0 ? 1.2 : 0.85; // squash wide, then stretch narrow
+  });
+  const scaleYKeys = bounces.map((_, i) => {
+    if (i === bounces.length - 1) return 1;
+    return i % 2 === 0 ? 0.8 : 1.15; // inverse of scaleX
+  });
+
+  const spinAngle = rotations[0] ?? 0;
 
   return (
     <div className="lobby-dice-inline">
       {/* Dice Tray — bounded area where the die tumbles */}
       <div className="dice-tray">
-        {/* The D20 die — bounces around chaotically, tumbles in 3D */}
+        {/* The D20 die — bounces around chaotically with squash & stretch */}
         <motion.div
           key={bounceKey}
           className="d20-die-wrapper"
-          initial={{ x: 0, y: 0, opacity: 1 }}
+          initial={{ x: 0, y: 0 }}
           animate={
             rolling
-              ? {
-                  x: xKeys,
-                  y: yKeys,
-                  scale: scaleKeys,
-                }
-              : { x: 0, y: 0, scale: 1 }
+              ? { x: xKeys, y: yKeys }
+              : { x: 0, y: 0 }
           }
           transition={
             rolling
@@ -970,22 +976,32 @@ function DiceRollInline({
         >
           <motion.div
             className="d20-die"
-            initial={{ rotateX: 0, rotateY: 0, rotateZ: 0 }}
             animate={
               rolling
-                ? { rotateX: rotKeys, rotateY: rotKeys, rotateZ: rotKeys }
-                : { rotateX: 0, rotateY: 0, rotateZ: 0 }
+                ? { rotate: spinAngle }
+                : { rotate: 0 }
             }
             transition={
               rolling
-                ? { duration: 1.8, ease: 'easeOut' }
+                ? { duration: 1.8, ease: [0.25, 0.1, 0.25, 1] }
                 : { type: 'spring', stiffness: 400, damping: 15 }
             }
-            style={{ transformStyle: 'preserve-3d' }}
           >
-            <div className="d20-face">
+            <motion.div
+              className="d20-face"
+              animate={rolling ? { scaleX: scaleXKeys, scaleY: scaleYKeys } : { scaleX: 1, scaleY: 1 }}
+              transition={
+                rolling
+                  ? {
+                      duration: 1.8,
+                      times: scaleXKeys.map((_, i) => i / (scaleXKeys.length - 1)),
+                      ease: 'easeInOut',
+                    }
+                  : {}
+              }
+            >
               <span className="d20-number">{displayNum ?? '?'}</span>
-            </div>
+            </motion.div>
           </motion.div>
         </motion.div>
 
