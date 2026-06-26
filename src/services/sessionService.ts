@@ -266,12 +266,23 @@ export async function setPlayerDecklist(
   decklist: Decklist | null,
   deckName: string | null = null,
   deckSourceUrl: string | null = null,
+  bracket: number | null = null,
 ): Promise<void> {
   await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
     decklist,
     deckName,
     deckSourceUrl,
+    bracket,
   });
+}
+
+/** Update only the player's deck bracket/power level. */
+export async function setPlayerBracket(
+  sessionId: string,
+  uid: string,
+  bracket: number | null,
+): Promise<void> {
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), { bracket });
 }
 
 export async function setPlayerReady(

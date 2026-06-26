@@ -432,6 +432,15 @@ function PlayerPanel({
             <div className="flex items-center gap-sm">
               <strong>{name}</strong>
               {player.isHost && <span className="badge badge-host">HOST</span>}
+              {player.bracket != null && (
+                <span
+                  className="badge"
+                  title={`Bracket ${player.bracket}`}
+                  style={{ background: 'var(--color-accent)', color: '#fff', fontSize: '0.65rem', padding: '0.1rem 0.35rem', fontWeight: 700 }}
+                >
+                  B{player.bracket}
+                </span>
+              )}
             </div>
             <span className="panel-cmd-name">{player.commander?.name ?? 'Unknown'}</span>
           </div>

@@ -132,6 +132,8 @@ export interface SessionPlayer {
   decklist?: Decklist | null;
   deckName?: string | null;
   deckSourceUrl?: string | null;
+  /** Deck power level / bracket (1–5), imported from Archidekt or set manually. */
+  bracket?: number | null;
 
   // Dice roll for turn order
   diceRoll?: number | null;

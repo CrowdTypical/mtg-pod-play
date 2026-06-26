@@ -209,14 +209,36 @@ export async function enrichDecklist(entries: DecklistEntry[]): Promise<Decklist
 }
 
 /* --------------------------------------------------------
- * Archidekt import
+ * Commander extraction from decklist
  * -------------------------------------------------------- */
+
+/**
+ * Build a CommanderInfo from a decklist entry by fetching full card data
+ * from Scryfall. Returns null if the card can't be found.
+ *
+ * Used to auto-sync a player's commander from an imported decklist.
+ */
+export async function getCommanderFromEntry(
+  entry: DecklistEntry,
+): Promise<CommanderInfo | null> {
+  if (!entry.scryfallId && !entry.name) return null;
+  const card = entry.scryfallId
+    ? await getCardById(entry.scryfallId)
+    : await getCardByName(entry.name);
+  if (!card) return null;
+  return cardToCommander(card);
+}
+
 
 /** Result of importing a deck from an external source. */
 export interface DeckImportResult {
   decklist: Decklist;
   name: string | null;
   sourceUrl: string | null;
+  /** Deck power level (1–5) / bracket, if the source provides it. */
+  bracket?: number | null;
+  /** The commander entry found in the decklist, if any. */
+  commander?: DecklistEntry | null;
 }
 
 /**
@@ -273,15 +295,29 @@ export async function importFromArchidekt(url: string): Promise<DeckImportResult
   if (entries.length === 0) {
     throw new Error('No cards found. Is the deck public?');
   }
+
+  // Extract the commander entry (first card flagged as commander).
+  const commanderEntry = entries.find((e) => e.isCommander) ?? null;
+
+  // Archidekt exposes a deck-level `powerLevel` (1–5, optional).
+  // Clamp to a sane range; null if missing/invalid.
+  const rawPower = typeof data.powerLevel === 'number' ? data.powerLevel : null;
+  const bracket =
+    rawPower !== null && rawPower >= 1 && rawPower <= 5 ? Math.round(rawPower) : null;
+
   return {
     decklist: entries,
     name: data.name ?? null,
     sourceUrl: `https://archidekt.com/decks/${deckId}`,
+    bracket,
+    commander: commanderEntry,
   };
 }
 
 interface ArchidektDeck {
   name?: string;
+  /** Deck power level (1–5), optional on Archidekt. */
+  powerLevel?: number;
   cards: Array<{
     quantity: number;
     categories: string[];

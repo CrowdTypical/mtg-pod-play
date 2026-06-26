@@ -98,6 +98,11 @@
 /* Dice roll inside merged panel */
 .lobby-dice-inline {
   text-align: center;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .lobby-dice-result {
@@ -105,6 +110,39 @@
   font-weight: 800;
   color: var(--color-accent);
   line-height: 1;
+}
+
+/* --- Visual D20 Die --- */
+.d20-die {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  user-select: none;
+}
+
+.d20-face {
+  width: 64px;
+  height: 64px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Hexagonal-ish shape using clip-path to evoke a d20 face */
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-primary));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.d20-number {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  z-index: 2;
 }
 
 /* --- Players column heading --- */

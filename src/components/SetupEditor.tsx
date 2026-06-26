@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 
 import {
+  setPlayerBracket,
   setPlayerCommander,
   setPlayerDecklist,
 } from '@/services/sessionService';
 import {
   enrichDecklist,
+  getCommanderFromEntry,
   importFromArchidekt,
   parseDecklistText,
   searchCommanders,
@@ -41,6 +43,62 @@ export default function SetupEditor({
 
         <CommanderSection sessionId={sessionId} player={player} />
         <DecklistSection sessionId={sessionId} player={player} />
+        <BracketSection sessionId={sessionId} player={player} />
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/** Display labels for the 1–5 bracket system. */
+const BRACKET_LABELS: Record<number, string> = {
+  1: 'Exhibition',
+  2: 'Core',
+  3: 'Upgraded',
+  4: 'Optimized',
+  5: 'High Power',
+};
+
+function BracketSection({
+  sessionId,
+  player,
+}: {
+  sessionId: string;
+  player: SessionPlayer;
+}) {
+  const [changing, setChanging] = useState(false);
+
+  async function handleChange(value: number | null) {
+    setChanging(true);
+    try {
+      await setPlayerBracket(sessionId, player.uid, value);
+    } finally {
+      setChanging(false);
+    }
+  }
+
+  return (
+    <div className="form-group">
+      <label className="form-label">Deck Bracket / Power Level</label>
+      <div className="flex items-center gap-sm">
+        <select
+          className="form-input"
+          value={player.bracket ?? ''}
+          disabled={changing}
+          onChange={(e) => {
+            const v = e.target.value;
+            handleChange(v === '' ? null : parseInt(v, 10));
+          }}
+          style={{ maxWidth: 220 }}
+        >
+          <option value="">Not set</option>
+          {Object.entries(BRACKET_LABELS).map(([num, label]) => (
+            <option key={num} value={num}>
+              {num} — {label}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -93,7 +151,9 @@ function CommanderSection({
 
   return (
     <div className="form-group">
-      <label className="form-label">Commander</label>
+      <label className="form-label">
+        Commander <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>(optional)</span>
+      </label>
       {player.commander ? (
         <div className="flex items-center gap-md">
           {player.commander.imageUris?.small && (
@@ -182,7 +242,22 @@ function DecklistSection({
     try {
       const imported = await importFromArchidekt(url);
       const enriched = await enrichDecklist(imported.decklist);
-      await setPlayerDecklist(sessionId, uid, enriched, imported.name, imported.sourceUrl);
+      await setPlayerDecklist(
+        sessionId,
+        uid,
+        enriched,
+        imported.name,
+        imported.sourceUrl,
+        imported.bracket ?? null,
+      );
+
+      // Auto-sync commander from the decklist.
+      if (imported.commander && !player.commander) {
+        const cmdEntry = enriched.find((e) => e.isCommander) ?? imported.commander;
+        const cmdInfo = await getCommanderFromEntry(cmdEntry);
+        if (cmdInfo) await setPlayerCommander(sessionId, uid, cmdInfo);
+      }
+
       setShowImport(false);
       setUrl('');
     } catch (err) {
@@ -203,7 +278,15 @@ function DecklistSection({
         return;
       }
       const enriched = await enrichDecklist(parsed);
-      await setPlayerDecklist(sessionId, uid, enriched, null, null);
+      await setPlayerDecklist(sessionId, uid, enriched, null, null, null);
+
+      // Auto-sync commander from the pasted decklist.
+      const cmdEntry = enriched.find((e) => e.isCommander);
+      if (cmdEntry && !player.commander) {
+        const cmdInfo = await getCommanderFromEntry(cmdEntry);
+        if (cmdInfo) await setPlayerCommander(sessionId, uid, cmdInfo);
+      }
+
       setShowImport(false);
       setDecklistText('');
     } catch (err) {
@@ -214,13 +297,15 @@ function DecklistSection({
   }
 
   async function handleClear() {
-    await setPlayerDecklist(sessionId, uid, null, null, null);
+    await setPlayerDecklist(sessionId, uid, null, null, null, null);
     setShowImport(true);
   }
 
   return (
     <div className="form-group">
-      <label className="form-label">Decklist</label>
+      <label className="form-label">
+        Decklist <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>(optional)</span>
+      </label>
       {player.decklist && player.decklist.length > 0 && !showImport ? (
         <div className="flex justify-between items-center">
           <div>
@@ -245,7 +330,7 @@ function DecklistSection({
               className={`btn btn-xs ${!manualMode ? 'btn-primary' : 'btn-outline'}`}
               style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
             >
-              🔗 URL
+              Archidekt URL
             </button>
             <button
               type="button"
@@ -253,7 +338,7 @@ function DecklistSection({
               className={`btn btn-xs ${manualMode ? 'btn-primary' : 'btn-outline'}`}
               style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
             >
-              ✍️ Manual Text
+              Manual Text
             </button>
           </div>
 

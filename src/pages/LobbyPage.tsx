@@ -8,6 +8,7 @@ import {
   computeTurnOrder,
   resetDiceRolls,
   rollDice,
+  setPlayerBracket,
   setPlayerCommander,
   setPlayerDecklist,
   setPlayerReady,
@@ -17,6 +18,7 @@ import {
 } from '@/services/sessionService';
 import {
   enrichDecklist,
+  getCommanderFromEntry,
   importFromArchidekt,
   parseDecklistText,
   searchCommanders,
@@ -344,9 +346,9 @@ function PlayerRow({
           <p className="text-muted" style={{ fontSize: '0.85rem' }}>
             {player.commander?.name ?? 'No commander selected'}
           </p>
-          {/* Deck name as hyperlink */}
+          {/* Deck name as hyperlink + bracket badge */}
           {hasDeck && (
-            <p style={{ fontSize: '0.8rem', marginTop: '0.15rem' }}>
+            <p style={{ fontSize: '0.8rem', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               {player.deckSourceUrl ? (
                 <a
                   href={player.deckSourceUrl}
@@ -359,6 +361,7 @@ function PlayerRow({
               ) : (
                 <span className="text-muted">📜 {player.decklist!.length} cards</span>
               )}
+              {player.bracket != null && <BracketBadge bracket={player.bracket} />}
             </p>
           )}
         </div>
@@ -552,7 +555,6 @@ function MySetupPanel({
   bare?: boolean;
 }) {
   const { user } = useAuth();
-  const [showDeckImport, setShowDeckImport] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [decklistText, setDecklistText] = useState('');
   const [archidektUrl, setArchidektUrl] = useState('');
@@ -572,8 +574,16 @@ function MySetupPanel({
         return;
       }
       const enriched = await enrichDecklist(parsed);
-      await setPlayerDecklist(sessionId, uid, enriched, null, null);
-      setShowDeckImport(false);
+      await setPlayerDecklist(sessionId, uid, enriched, null, null, null);
+
+      // Auto-sync commander if the pasted decklist has a marked commander
+      // and the player hasn't manually chosen one yet.
+      const cmdEntry = enriched.find((e) => e.isCommander);
+      if (cmdEntry && !player.commander) {
+        const cmdInfo = await getCommanderFromEntry(cmdEntry);
+        if (cmdInfo) await setPlayerCommander(sessionId, uid, cmdInfo);
+      }
+
       setDecklistText('');
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Failed to import decklist.');
@@ -589,8 +599,23 @@ function MySetupPanel({
     try {
       const imported = await importFromArchidekt(archidektUrl);
       const enriched = await enrichDecklist(imported.decklist);
-      await setPlayerDecklist(sessionId, uid, enriched, imported.name, imported.sourceUrl);
-      setShowDeckImport(false);
+      await setPlayerDecklist(
+        sessionId,
+        uid,
+        enriched,
+        imported.name,
+        imported.sourceUrl,
+        imported.bracket ?? null,
+      );
+
+      // Auto-sync commander from the decklist if the player hasn't picked
+      // one manually yet. This is the "decklist same as commander" link.
+      if (imported.commander && !player.commander) {
+        const cmdEntry = enriched.find((e) => e.isCommander) ?? imported.commander;
+        const cmdInfo = await getCommanderFromEntry(cmdEntry);
+        if (cmdInfo) await setPlayerCommander(sessionId, uid, cmdInfo);
+      }
+
       setArchidektUrl('');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to import from Archidekt.';
@@ -601,14 +626,16 @@ function MySetupPanel({
   }
 
   async function handleClearDeck() {
-    await setPlayerDecklist(sessionId, uid, null, null, null);
+    await setPlayerDecklist(sessionId, uid, null, null, null, null);
   }
 
   const inner = (
     <>
       {/* Commander — visual picker */}
       <div className="form-group">
-        <label className="form-label">Your Commander</label>
+        <label className="form-label">
+          Your Commander <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>(optional)</span>
+        </label>
         <CommanderPicker
           sessionId={sessionId}
           uid={uid}
@@ -616,9 +643,11 @@ function MySetupPanel({
         />
       </div>
 
-      {/* Decklist */}
+      {/* Decklist + Bracket */}
       <div className="form-group">
-        <label className="form-label">Your Decklist</label>
+        <label className="form-label">
+          Your Decklist <span className="text-muted" style={{ fontWeight: 400, fontSize: '0.8rem' }}>(optional)</span>
+        </label>
         {player.decklist ? (
           <div className="flex justify-between items-center">
             <div>
@@ -626,15 +655,27 @@ function MySetupPanel({
               {player.deckName && (
                 <p className="text-muted" style={{ fontSize: '0.8rem' }}>{player.deckName}</p>
               )}
+              {player.bracket != null && (
+                <p className="text-muted" style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  Bracket: <BracketBadge bracket={player.bracket} />
+                </p>
+              )}
             </div>
-            <button
-              onClick={handleClearDeck}
-              className="btn btn-outline btn-sm"
-            >
-              Remove
-            </button>
+            <div className="flex flex-col gap-xs" style={{ alignItems: 'flex-start' }}>
+              <BracketSelector
+                sessionId={sessionId}
+                uid={uid}
+                bracket={player.bracket ?? null}
+              />
+              <button
+                onClick={handleClearDeck}
+                className="btn btn-outline btn-sm"
+              >
+                Remove
+              </button>
+            </div>
           </div>
-        ) : showDeckImport ? (
+        ) : (
           <div>
             {importError && <p className="form-error mb-sm">{importError}</p>}
 
@@ -647,7 +688,7 @@ function MySetupPanel({
                 className={`btn btn-xs ${!manualMode ? 'btn-primary' : 'btn-outline'}`}
                 style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
               >
-                🔗 URL
+                Archidekt URL
               </button>
               <button
                 type="button"
@@ -655,7 +696,7 @@ function MySetupPanel({
                 className={`btn btn-xs ${manualMode ? 'btn-primary' : 'btn-outline'}`}
                 style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
               >
-                ✍️ Manual Text
+                Manual Text
               </button>
             </div>
 
@@ -700,13 +741,8 @@ function MySetupPanel({
                   ) : 'Import Text'}
                 </button>
               )}
-              <button onClick={() => setShowDeckImport(false)} className="btn btn-outline btn-sm">Cancel</button>
             </div>
           </div>
-        ) : (
-          <button onClick={() => setShowDeckImport(true)} className="btn btn-outline btn-sm">
-            + Add Decklist
-          </button>
         )}
       </div>
     </>
@@ -718,6 +754,90 @@ function MySetupPanel({
     <div className="card mb-lg">
       <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
       {inner}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Bracket Badge & Selector
+ * ============================================================ */
+
+/** Display labels for the 1–5 bracket system. */
+const BRACKET_LABELS: Record<number, string> = {
+  1: 'Exhibition',
+  2: 'Core',
+  3: 'Upgraded',
+  4: 'Optimized',
+  5: 'High Power',
+};
+
+/** Small colored pill showing the deck's bracket / power tier. */
+function BracketBadge({ bracket }: { bracket: number }) {
+  const label = BRACKET_LABELS[bracket] ?? `Tier ${bracket}`;
+  return (
+    <span
+      className="badge"
+      title={`Bracket ${bracket} — ${label}`}
+      style={{
+        background: 'var(--color-accent)',
+        color: '#fff',
+        fontSize: '0.7rem',
+        padding: '0.1rem 0.4rem',
+        fontWeight: 700,
+      }}
+    >
+      B{bracket}
+    </span>
+  );
+}
+
+/** A compact dropdown to let the player set their bracket manually. */
+function BracketSelector({
+  sessionId,
+  uid,
+  bracket,
+}: {
+  sessionId: string;
+  uid: string;
+  bracket: number | null | undefined;
+}) {
+  const [changing, setChanging] = useState(false);
+
+  async function handleChange(value: number | null) {
+    setChanging(true);
+    try {
+      await setPlayerBracket(sessionId, uid, value);
+    } finally {
+      setChanging(false);
+    }
+  }
+
+  return (
+    <div className="form-group">
+      <label className="form-label">Deck Bracket / Power Level</label>
+      <div className="flex items-center gap-sm">
+        <select
+          className="form-input"
+          value={bracket ?? ''}
+          disabled={changing}
+          onChange={(e) => {
+            const v = e.target.value;
+            handleChange(v === '' ? null : parseInt(v, 10));
+          }}
+          style={{ maxWidth: 220 }}
+        >
+          <option value="">Not set</option>
+          {Object.entries(BRACKET_LABELS).map(([num, label]) => (
+            <option key={num} value={num}>
+              {num} — {label}
+            </option>
+          ))}
+        </select>
+        {bracket != null && <BracketBadge bracket={bracket} />}
+      </div>
+      <p className="text-muted" style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>
+        Auto-detected from Archidekt. Override manually if needed.
+      </p>
     </div>
   );
 }
@@ -736,29 +856,87 @@ function DiceRollInline({
   diceRoll: number | null;
 }) {
   const [rolling, setRolling] = useState(false);
+  const [displayNum, setDisplayNum] = useState<number | null>(null);
+
+  // Sync display number when diceRoll arrives from Firestore
+  useEffect(() => {
+    if (diceRoll == null) return;
+    if (rolling) {
+      // Brief delay for dramatic landing effect
+      const timer = setTimeout(() => {
+        setDisplayNum(diceRoll);
+        setRolling(false);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+    setDisplayNum(diceRoll);
+  }, [diceRoll]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cycle random numbers during rolling for visual effect
+  useEffect(() => {
+    if (!rolling) return;
+    const interval = setInterval(() => {
+      setDisplayNum(Math.floor(Math.random() * 20) + 1);
+    }, 80);
+    return () => clearInterval(interval);
+  }, [rolling]);
 
   async function handleRoll() {
     setRolling(true);
+    setDisplayNum(Math.floor(Math.random() * 20) + 1);
     try {
       await rollDice(sessionId, uid);
-    } finally {
+      // Don't stop rolling here — wait for the subscription to deliver diceRoll.
+    } catch {
       setRolling(false);
+      setDisplayNum(null);
     }
+  }
+
+  // Initial state: show the roll button
+  if (diceRoll == null && !rolling) {
+    return (
+      <div className="lobby-dice-inline">
+        <button onClick={handleRoll} className="btn btn-accent btn-lg">
+          🎲 Roll D20
+        </button>
+      </div>
+    );
   }
 
   return (
     <div className="lobby-dice-inline">
-      {diceRoll != null ? (
-        <div>
-          <p className="lobby-dice-result">{diceRoll}</p>
-          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-            You rolled a {diceRoll}. Ask the host to reset if needed.
-          </p>
-        </div>
-      ) : (
-        <button onClick={handleRoll} className="btn btn-accent btn-lg" disabled={rolling}>
-          {rolling ? 'Rolling…' : '🎲 Roll D20'}
-        </button>
+      {/* D20 — spins in from the right, wobbles while rolling */}
+      <motion.div
+        initial={{ x: 300, opacity: 0, rotate: 180, scale: 0.3 }}
+        animate={{ x: 0, opacity: 1, rotate: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+      >
+        <motion.div
+          className="d20-die"
+          animate={rolling ? { rotate: [-8, 8, -8] } : { rotate: 0 }}
+          transition={
+            rolling
+              ? { repeat: Infinity, duration: 0.3, ease: 'easeInOut' }
+              : { type: 'spring', stiffness: 300, damping: 15 }
+          }
+        >
+          <div className="d20-face">
+            <span className="d20-number">{displayNum ?? '?'}</span>
+          </div>
+        </motion.div>
+      </motion.div>
+
+      {rolling && (
+        <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+          Rolling…
+        </p>
+      )}
+
+      {!rolling && displayNum != null && (
+        <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+          You rolled a {displayNum}. Ask the host to reset if needed.
+        </p>
       )}
     </div>
   );
