@@ -860,25 +860,23 @@ function DiceRollInline({
   // Randomized bounce keyframes — regenerated each roll for variety
   const [bounceKey, setBounceKey] = useState(0);
 
-  // Generate a zigzag / ricochet path that stays inside the dice-tray bounds.
+  // Generate a ricochet path: enter top-right → left wall → bottom → settle.
   // Tray is 140×100, die is 64px → safe travel is ±38px X, ±18px Y.
-  // We use conservative ±30/±12 so the die never clips the tray edge.
+  // The entry point (top-right) is the first keyframe; framer-motion animates
+  // from `initial` (set to the same entry) through each waypoint in order.
   function genBounces() {
-    const bounces = [{ x: 0, y: 0 }]; // launch from center
-    const maxX = 30;
-    const maxY = 12;
-    const side = Math.random() < 0.5 ? 1 : -1; // randomize first wall
+    const maxX = 36;
+    const maxY = 16;
 
-    // Diagonal zigzag: each bounce hits the opposite corner, decaying ~28%/hop.
-    for (let i = 0; i < 7; i++) {
-      const decay = Math.pow(0.72, i);
-      bounces.push({
-        x: side * maxX * decay * (i % 2 === 0 ? 1 : -1),
-        y: maxY * decay * (i % 2 === 0 ? -1 : 1),
-      });
-    }
-    bounces.push({ x: 0, y: 0 }); // settle center
-    return bounces;
+    // Path AFTER entry — the entry point itself is set via the `initial` prop
+    // (further off-screen top-right) so the die visibly sweeps INTO the tray.
+    // Sequence: left wall → bottom → small rebound → settle center.
+    return [
+      { x: -maxX, y: maxY * 0.2 },          // 1. Left wall (hard impact)
+      { x: maxX * 0.3, y: maxY },            // 2. Bottom area
+      { x: -maxX * 0.15, y: -maxY * 0.3 },   // 3. Small rebound
+      { x: 0, y: 0 },                         // 4. Settle center
+    ];
   }
 
   const [bounces, setBounces] = useState(genBounces());
@@ -964,7 +962,7 @@ function DiceRollInline({
         <motion.div
           key={bounceKey}
           className="d20-die-wrapper"
-          initial={{ x: 0, y: 0 }}
+          initial={rolling ? { x: 55, y: -30 } : { x: 0, y: 0 }}
           animate={
             rolling
               ? { x: xKeys, y: yKeys }
@@ -974,7 +972,9 @@ function DiceRollInline({
             rolling
               ? {
                   duration: 1.8,
-                  times: xKeys.map((_, i) => i / (xKeys.length - 1)),
+                  // Weighted timing: fast entry sweep, then slower settling.
+                  // [entry→left, left→bottom, bottom→rebound, rebound→center]
+                  times: [0.18, 0.42, 0.68, 1],
                   ease: 'easeInOut',
                 }
               : { type: 'spring', stiffness: 500, damping: 12 }
