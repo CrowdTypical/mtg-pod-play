@@ -98,35 +98,6 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Recent stats placeholder */}
-      <div className="card mt-lg">
-        <h3 style={{ marginBottom: '1rem' }}>Your Stats</h3>
-        <div className="grid grid-3">
-          <div className="text-center">
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Games Played</p>
-            <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-primary)' }}>
-              {profile?.gamesPlayed ?? 0}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Wins</p>
-            <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-accent)' }}>
-              {profile?.wins ?? 0}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-muted" style={{ fontSize: '0.85rem' }}>Avg. Placement</p>
-            <p style={{ fontSize: '2rem', fontWeight: 700, color: 'var(--color-info)' }}>
-              {profile?.avgPlacement ? profile.avgPlacement.toFixed(1) : '—'}
-            </p>
-          </div>
-        </div>
-        <div className="mt-lg text-center">
-          <Link to="/profile" className="btn btn-outline btn-sm">
-            View Full History
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAuth } from '@/context/AuthContext';
@@ -47,7 +47,7 @@ export default function MatchPage() {
     const u1 = subscribeToSession(sessionId, setSession);
     const u2 = subscribeToPlayers(sessionId, setPlayers);
     const u3 = subscribeToCommanderDamage(sessionId, setCmdDamage);
-    const u4 = subscribeToEvents(sessionId, (e) => setEvents(e.slice(-20).reverse()));
+    const u4 = subscribeToEvents(sessionId, (e) => setEvents(e.slice(-30).reverse()));
     return () => {
       u1();
       u2();
@@ -89,6 +89,8 @@ export default function MatchPage() {
   const matchMode = session.matchMode ?? 'normal';
   const currentTurnPlayer =
     orderedPlayers[session.currentTurnIndex] ?? orderedPlayers[0] ?? players[0];
+  // Derive a display turn number from the turn index (0-based → 1-based)
+  const turnNumber = (session.currentTurnIndex ?? 0) + 1;
 
   /** Whether the current user can edit this player's stats. */
   function canControl(player: SessionPlayer): boolean {
@@ -104,12 +106,28 @@ export default function MatchPage() {
         <Link to="/" className="btn btn-outline btn-sm">← Exit</Link>
         <div className="turn-indicator">
           {session.turnOrder.length > 0 && !isCompleted && currentTurnPlayer && (
-            <>
-              <span className="text-muted">Turn: </span>
-              <strong>{getDisplayName(currentTurnPlayer)}</strong>
-            </>
+            <div className="turn-pill">
+              {currentTurnPlayer.commander?.imageUris?.small && (
+                <img
+                  src={currentTurnPlayer.commander.imageUris.small}
+                  alt=""
+                  className="turn-thumb"
+                />
+              )}
+              <div className="turn-text">
+                <span className="turn-label">Turn {turnNumber}</span>
+                <strong>{getDisplayName(currentTurnPlayer)}</strong>
+              </div>
+            </div>
           )}
-          {isCompleted && <strong>🏁 Game Over</strong>}
+          {isCompleted && (
+            <div className="turn-pill">
+              <span className="turn-text">
+                <span className="turn-label">Game Over</span>
+                <strong>🏁 Final</strong>
+              </span>
+            </div>
+          )}
         </div>
         {!isCompleted && isHost && (
           <button
@@ -166,7 +184,8 @@ export default function MatchPage() {
           ) : (
             <div className="event-list">
               {events.map((e) => (
-                <div key={e.id} className="event-item">
+                <div key={e.id} className={`event-item ${getEventClass(e.message)}`}>
+                  <span className="event-icon">{getEventIcon(e.message)}</span>
                   <span className="event-msg">{e.message}</span>
                 </div>
               ))}
@@ -204,8 +223,30 @@ export default function MatchPage() {
   );
 }
 
+/** Helper: assign an icon based on event message content */
+function getEventIcon(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (lower.includes('eliminated') || lower.includes('died')) return '💀';
+  if (lower.includes('damage') || lower.includes('lost')) return '⚔️';
+  if (lower.includes('healed') || lower.includes('gained')) return '💚';
+  if (lower.includes('poison')) return '☠';
+  if (lower.includes('turn')) return '🔄';
+  if (lower.includes('revived')) return '♻️';
+  return '•';
+}
+
+/** Helper: assign a CSS class based on event message content */
+function getEventClass(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (lower.includes('eliminated') || lower.includes('died')) return 'event-danger';
+  if (lower.includes('damage') || lower.includes('lost')) return 'event-damage';
+  if (lower.includes('healed') || lower.includes('gained')) return 'event-heal';
+  if (lower.includes('poison')) return 'event-poison';
+  return '';
+}
+
 /* ============================================================
- * Player Panel
+ * Player Panel — Redesigned with progress bars and better hierarchy
  * ============================================================ */
 
 function PlayerPanel({
@@ -237,6 +278,18 @@ function PlayerPanel({
 }) {
   const [busy, setBusy] = useState(false);
   const [showHostMenu, setShowHostMenu] = useState(false);
+  const prevHealth = useRef(player.health);
+  const [flashType, setFlashType] = useState<'up' | 'down' | null>(null);
+
+  // Detect health changes to trigger flash animation
+  useEffect(() => {
+    if (player.health !== prevHealth.current) {
+      setFlashType(player.health > prevHealth.current ? 'up' : 'down');
+      prevHealth.current = player.health;
+      const timer = setTimeout(() => setFlashType(null), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [player.health]);
 
   async function handleHealth(delta: number) {
     if (!canControl) return;
@@ -296,6 +349,9 @@ function PlayerPanel({
   if (healthRatio <= 0.15) healthClass = 'health-critical';
   else if (healthRatio <= 0.35) healthClass = 'health-low';
 
+  // Poison progress (lethal at 10)
+  const poisonPct = Math.min((player.poison / 10) * 100, 100);
+
   // Color identity for the top strip
   const colors = player.commander?.colors ?? [];
   const colorMap: Record<string, string> = {
@@ -310,7 +366,6 @@ function PlayerPanel({
   const cmdArtUrl = player.commander?.imageUris?.normal ?? player.commander?.imageUris?.large;
 
   // Pass turn button shows on the current turn player's panel.
-  // Normal mode: only if it's me. Host mode: only if I'm host.
   const showPassTurn =
     isCurrentTurn &&
     !isDead &&
@@ -335,189 +390,210 @@ function PlayerPanel({
       )}
       <div className="panel-art-overlay" />
 
+      {/* Eliminated overlay */}
+      {isDead && (
+        <div className="eliminated-overlay">
+          <span className="eliminated-icon">💀</span>
+          <span className="eliminated-text">ELIMINATED</span>
+          {player.placement && (
+            <span className="eliminated-placement">#{player.placement}</span>
+          )}
+        </div>
+      )}
+
       {/* Content wrapper */}
       <div className="panel-content">
-      {/* Header */}
-      <div className="panel-header">
-        {player.commander?.imageUris ? (
-          <img src={player.commander.imageUris.small} alt="" className="panel-cmd-img" />
-        ) : (
-          <div className="panel-cmd-img panel-cmd-placeholder">?</div>
-        )}
-        <div className="panel-name">
-          <div className="flex items-center gap-sm">
-            <strong>{name}</strong>
-            {player.placement && <span className="placement-badge">#{player.placement}</span>}
-            {player.isHost && <span className="badge badge-host">HOST</span>}
+        {/* Header */}
+        <div className="panel-header">
+          {player.commander?.imageUris ? (
+            <img src={player.commander.imageUris.small} alt="" className="panel-cmd-img" />
+          ) : (
+            <div className="panel-cmd-img panel-cmd-placeholder">?</div>
+          )}
+          <div className="panel-name">
+            <div className="flex items-center gap-sm">
+              <strong>{name}</strong>
+              {player.isHost && <span className="badge badge-host">HOST</span>}
+            </div>
+            <span className="panel-cmd-name">{player.commander?.name ?? 'Unknown'}</span>
           </div>
-          <span className="text-muted panel-cmd-name">{player.commander?.name ?? 'Unknown'}</span>
+          {/* Active turn badge */}
+          {isCurrentTurn && !isDead && (
+            <span className="active-badge">● ACTIVE</span>
+          )}
         </div>
-      </div>
 
-      {/* Pass Turn button (prominent, current player only) */}
-      {showPassTurn && (
-        <button
-          onClick={onAdvanceTurn}
-          className="btn btn-primary btn-block btn-sm mb-sm pass-turn-btn"
-        >
-          ⏭️ Pass Turn
-        </button>
-      )}
-
-      {/* Health */}
-      <div className="stat-health">
-        {canControl ? (
+        {/* Pass Turn button (prominent, current player only) */}
+        {showPassTurn && (
           <button
-            onClick={() => handleHealth(-1)}
-            className="stat-btn stat-btn-lg stat-btn-minus"
-            disabled={busy || isDead}
+            onClick={onAdvanceTurn}
+            className="btn btn-primary btn-block btn-sm pass-turn-btn"
           >
-            −
+            ⏭️ Pass Turn
           </button>
-        ) : (
-          <div className="stat-btn-spacer stat-btn-lg" />
         )}
-        <div className="health-display">
-          <span className={`health-number ${healthClass}`}>{player.health}</span>
-          <span className="health-label">Life</span>
-        </div>
-        {canControl ? (
-          <button
-            onClick={() => handleHealth(1)}
-            className="stat-btn stat-btn-lg"
-            disabled={busy || isDead}
-          >
-            +
-          </button>
-        ) : (
-          <div className="stat-btn-spacer stat-btn-lg" />
-        )}
-      </div>
 
-      {/* Quick damage buttons — only for controllable players */}
-      {canControl && !isDead && (
-        <div className="quick-dmg">
-          {[-5, -3, -2, -1].map((n) => (
+        {/* Health — centerpiece */}
+        <div className={`stat-health ${flashType ? `flash-${flashType}` : ''}`}>
+          {canControl ? (
             <button
-              key={n}
-              onClick={() => handleHealth(n)}
-              className="quick-dmg-btn"
-              disabled={busy}
+              onClick={() => handleHealth(-1)}
+              className="stat-btn stat-btn-lg stat-btn-minus"
+              disabled={busy || isDead}
             >
-              {n}
+              −
             </button>
-          ))}
+          ) : (
+            <div className="stat-btn-spacer stat-btn-lg" />
+          )}
+          <div className="health-display">
+            <span className={`health-number ${healthClass}`}>{player.health}</span>
+            <span className="health-label">Life</span>
+            {/* Health bar */}
+            <div className="health-bar-track">
+              <div
+                className={`health-bar-fill ${healthClass}`}
+                style={{ width: `${Math.max(healthRatio * 100, 2)}%` }}
+              />
+            </div>
+          </div>
+          {canControl ? (
+            <button
+              onClick={() => handleHealth(1)}
+              className="stat-btn stat-btn-lg"
+              disabled={busy || isDead}
+            >
+              +
+            </button>
+          ) : (
+            <div className="stat-btn-spacer stat-btn-lg" />
+          )}
         </div>
-      )}
 
-      {/* Poison & Commander damage — read-only for non-controllable players */}
-      <div className="panel-stats">
-        <div className="stat-row">
-          <span className="stat-label">☠ Poison</span>
-          <div className="stat-controls">
-            {canControl ? (
-              <>
-                <button onClick={() => handlePoison(-1)} disabled={busy || isDead}>−</button>
-                <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
-                  {player.poison}
-                </span>
-                <button onClick={() => handlePoison(1)} disabled={busy || isDead}>+</button>
-              </>
-            ) : (
+        {/* Quick damage buttons — only for controllable players */}
+        {canControl && !isDead && (
+          <div className="quick-dmg">
+            <button onClick={() => handleHealth(-5)} className="quick-dmg-btn" disabled={busy}>−5</button>
+            <button onClick={() => handleHealth(-3)} className="quick-dmg-btn" disabled={busy}>−3</button>
+            <button onClick={() => handleHealth(-2)} className="quick-dmg-btn" disabled={busy}>−2</button>
+            <button onClick={() => handleHealth(-1)} className="quick-dmg-btn" disabled={busy}>−1</button>
+            <button onClick={() => handleHealth(1)} className="quick-dmg-btn quick-dmg-heal" disabled={busy}>+1</button>
+          </div>
+        )}
+
+        {/* Poison & Commander damage — redesigned with progress bars */}
+        <div className="panel-stats">
+          {/* Poison */}
+          <div className="stat-bar-row">
+            <div className="stat-bar-header">
+              <span className="stat-label">☠ Poison</span>
               <span className={`stat-value ${player.poison >= 8 ? 'stat-warning' : ''}`}>
-                {player.poison}
+                {player.poison}/10
               </span>
-            )}
-          </div>
-        </div>
-
-        {/* Commander damage received */}
-        <div className="cmd-dmg-section">
-          <p className="stat-label" style={{ marginBottom: '0.25rem' }}>⚔ Commander Damage</p>
-          {players
-            .filter((p) => p.uid !== player.uid && p.commander)
-            .map((source) => {
-              const dmg = cmdDamageFrom[source.uid] ?? 0;
-              return (
-                <div key={source.uid} className="cmd-dmg-row">
-                  <span className="cmd-dmg-name text-muted">
-                    {source.commander?.name?.split(',')[0] ?? getDisplayName(source)}
-                  </span>
-                  <div className="stat-controls">
-                    {canControl ? (
-                      <>
-                        <button
-                          onClick={() => handleCmdDamage(source.uid, -1)}
-                          disabled={busy || isDead}
-                        >
-                          −
-                        </button>
-                        <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>
-                          {dmg}
-                        </span>
-                        <button
-                          onClick={() => handleCmdDamage(source.uid, 1)}
-                          disabled={busy || isDead}
-                        >
-                          +
-                        </button>
-                      </>
-                    ) : (
-                      <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>
-                        {dmg}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-        </div>
-      </div>
-
-      {/* Footer actions */}
-      <div className="panel-footer">
-        {player.decklist && player.decklist.length > 0 && (
-          <button onClick={onViewDeck} className="btn btn-outline btn-sm">
-            📜 Deck ({player.decklist.length})
-          </button>
-        )}
-
-        {/* Eliminate / Revive */}
-        {!isDead && canControl && (
-          <button
-            onClick={handleEliminate}
-            className="btn btn-outline btn-sm btn-danger-outline"
-          >
-            Eliminate
-          </button>
-        )}
-        {isDead && isHost && (
-          <button onClick={handleRevive} className="btn btn-outline btn-sm btn-accent-outline">
-            ♻️ Revive
-          </button>
-        )}
-
-        {/* Host menu (transfer host) */}
-        {isHost && !isMe && (
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowHostMenu((v) => !v)}
-              className="btn btn-outline btn-sm"
-              title="Host options"
-            >
-              ⚙️
-            </button>
-            {showHostMenu && (
-              <div className="host-menu">
-                <button onClick={handleTransferHost} className="host-menu-item">
-                  👑 Make Host
-                </button>
+            </div>
+            <div className="progress-track">
+              <div
+                className={`progress-fill progress-poison ${player.poison >= 8 ? 'progress-danger' : ''}`}
+                style={{ width: `${poisonPct}%` }}
+              />
+            </div>
+            {canControl && !isDead && (
+              <div className="stat-bar-controls">
+                <button onClick={() => handlePoison(-1)} disabled={busy || isDead}>−</button>
+                <button onClick={() => handlePoison(1)} disabled={busy || isDead}>+</button>
               </div>
             )}
           </div>
-        )}
+
+          {/* Commander damage received */}
+          <div className="cmd-dmg-section">
+            <p className="stat-label" style={{ marginBottom: '0.35rem' }}>⚔ Commander Damage</p>
+            {players
+              .filter((p) => p.uid !== player.uid && p.commander)
+              .map((source) => {
+                const dmg = cmdDamageFrom[source.uid] ?? 0;
+                const dmgPct = Math.min((dmg / 21) * 100, 100);
+                const sourceColor = source.commander?.colors?.[0] ?? '';
+                return (
+                  <div key={source.uid} className="cmd-dmg-bar-row">
+                    <div className="cmd-dmg-bar-header">
+                      <span className="cmd-dmg-name text-muted">
+                        {source.commander?.name?.split(',')[0] ?? getDisplayName(source)}
+                      </span>
+                      <span className={`stat-value ${dmg >= 18 ? 'stat-warning' : ''}`}>
+                        {dmg}/21
+                      </span>
+                    </div>
+                    <div className="progress-track">
+                      <div
+                        className={`progress-fill ${dmg >= 18 ? 'progress-danger' : ''}`}
+                        style={{
+                          width: `${dmgPct}%`,
+                          background: dmg >= 18 ? '' : (colorMap[sourceColor] ?? 'var(--color-primary)'),
+                        }}
+                      />
+                    </div>
+                    {canControl && !isDead && (
+                      <div className="stat-bar-controls">
+                        <button onClick={() => handleCmdDamage(source.uid, -1)} disabled={busy || isDead}>−</button>
+                        <button onClick={() => handleCmdDamage(source.uid, 1)} disabled={busy || isDead}>+</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            {players.filter((p) => p.uid !== player.uid && p.commander).length === 0 && (
+              <p className="text-muted" style={{ fontSize: '0.75rem', fontStyle: 'italic' }}>
+                No opponent commanders
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="panel-footer">
+          {player.decklist && player.decklist.length > 0 && (
+            <button onClick={onViewDeck} className="btn btn-outline btn-sm">
+              📜 Deck ({player.decklist.length})
+            </button>
+          )}
+
+          {/* Eliminate / Revive */}
+          {!isDead && canControl && (
+            <button
+              onClick={handleEliminate}
+              className="btn btn-outline btn-sm btn-danger-outline"
+            >
+              Eliminate
+            </button>
+          )}
+          {isDead && isHost && (
+            <button onClick={handleRevive} className="btn btn-outline btn-sm btn-accent-outline">
+              ♻️ Revive
+            </button>
+          )}
+
+          {/* Host menu (transfer host) */}
+          {isHost && !isMe && (
+            <div style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowHostMenu((v) => !v)}
+                className="btn btn-outline btn-sm"
+                title="Host options"
+              >
+                ⚙️
+              </button>
+              {showHostMenu && (
+                <div className="host-menu">
+                  <button onClick={handleTransferHost} className="host-menu-item">
+                    👑 Make Host
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-      </div>{/* end panel-content */}
     </div>
   );
 }

@@ -103,19 +103,38 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Stats overview */}
-      <div className="grid grid-3 mb-lg">
-        <div className="card text-center">
-          <p className="stat-big">{totalGames}</p>
-          <p className="text-muted">Games Played</p>
-        </div>
-        <div className="card text-center">
-          <p className="stat-big">{wins}</p>
-          <p className="text-muted">Wins</p>
-        </div>
-        <div className="card text-center">
-          <p className="stat-big">{winRate}%</p>
-          <p className="text-muted">Win Rate</p>
+      {/* Stats index — line-item style */}
+      <div className="card mb-lg">
+        <h3 style={{ marginBottom: '1rem' }}>Your Stats</h3>
+        <div className="stats-index">
+          <div className="stats-index-row">
+            <span className="text-muted">Games Played</span>
+            <strong>{totalGames}</strong>
+          </div>
+          <div className="stats-index-row">
+            <span className="text-muted">Wins</span>
+            <strong style={{ color: 'var(--color-accent)' }}>{wins}</strong>
+          </div>
+          <div className="stats-index-row">
+            <span className="text-muted">Losses</span>
+            <strong style={{ color: 'var(--color-danger)' }}>{totalGames - wins}</strong>
+          </div>
+          <div className="stats-index-row">
+            <span className="text-muted">Win Rate</span>
+            <strong>{winRate}%</strong>
+          </div>
+          <div className="stats-index-row">
+            <span className="text-muted">Avg. Placement</span>
+            <strong>
+              {totalGames > 0
+                ? (history.reduce((s, g) => s + (g.placement ?? 0), 0) / totalGames).toFixed(1)
+                : '—'}
+            </strong>
+          </div>
+          <div className="stats-index-row">
+            <span className="text-muted">Unique Commanders</span>
+            <strong>{commanderStats.size}</strong>
+          </div>
         </div>
       </div>
 
@@ -168,8 +187,9 @@ function HistoryRow({ game }: { game: MatchHistoryEntry }) {
       })
     : 'Unknown date';
 
+  const isWin = game.placement === 1;
   const placementColor =
-    game.placement === 1 ? '#f5b50a' : game.placement === 2 ? '#9ca3af' : '#a47148';
+    isWin ? '#f5b50a' : game.placement === 2 ? '#9ca3af' : '#a47148';
 
   return (
     <div className="card" style={{ padding: '0.75rem 1rem' }}>
@@ -179,11 +199,21 @@ function HistoryRow({ game }: { game: MatchHistoryEntry }) {
         </div>
         <div className="flex-1">
           <p style={{ fontWeight: 600 }}>{game.commanderName ?? 'Unknown Commander'}</p>
-          <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+          <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.15rem' }}>
             {dateStr} · {game.playerCount} players
           </p>
+          {game.deckName && (
+            <p className="text-muted" style={{ fontSize: '0.8rem' }}>
+              📜 {game.deckName}
+            </p>
+          )}
         </div>
-        {game.placement === 1 && <span className="badge badge-win">🏆 Winner</span>}
+        <span
+          className={`badge ${isWin ? 'badge-win' : 'badge-loss'}`}
+          style={isWin ? {} : { background: 'var(--color-danger)', color: '#fff' }}
+        >
+          {isWin ? '🏆 Win' : `${game.placement ?? '—'}${game.placement === 2 ? 'nd' : game.placement === 3 ? 'rd' : 'th'}`}
+        </span>
       </div>
     </div>
   );

@@ -113,7 +113,7 @@ export default function SetupPage() {
                 <div>
                   <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Player-Driven</p>
                   <p className="text-muted" style={{ fontSize: '0.85rem' }}>
-                    Each player controls only their own stats on their own device. Best for in-person pods.
+                    Each player tracks their own stats on their own device. Great for in-person pods or digital games where everyone has access.
                   </p>
                 </div>
               </div>
@@ -133,12 +133,15 @@ export default function SetupPage() {
                 <div>
                   <p style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Host-Driven</p>
                   <p className="text-muted" style={{ fontSize: '0.85rem' }}>
-                    The host controls all players' stats from one device. Best for digital/streamed games.
+                    One person (the host) controls all players' stats from a single device. Useful when other players don't have a device handy.
                   </p>
                 </div>
               </div>
             </label>
           </div>
+          <p className="form-hint mt-md" style={{ fontSize: '0.8rem' }}>
+            💡 Both modes work great for digital games — the only difference is who's entering the stats.
+          </p>
         </div>
 
         {error && <p className="form-error">{error}</p>}

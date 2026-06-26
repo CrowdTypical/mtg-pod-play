@@ -772,6 +772,417 @@ a:hover {
   padding: var(--space-xs);
 }
 
+/* ============================================================
+ * Playboard Redesign — New components
+ * ============================================================ */
+
+/* ── Header enhancements ── */
+.turn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: 99px;
+  padding: 0.3rem 0.8rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.turn-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-border-light);
+  flex-shrink: 0;
+}
+
+.turn-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.turn-label {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.turn-indicator strong {
+  font-size: 0.95rem;
+  color: var(--color-primary);
+}
+
+/* ── Host info banner ── */
+.host-banner {
+  text-align: center;
+  padding: var(--space-xs) var(--space-md);
+  background: rgba(212, 175, 55, 0.05);
+  border: 1px solid rgba(212, 175, 55, 0.15);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+}
+
+/* ── Active turn badge ── */
+.active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0.15rem 0.5rem;
+  background: rgba(212, 175, 55, 0.15);
+  border: 1px solid var(--color-primary);
+  border-radius: 99px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.05em;
+  animation: active-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes active-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(212, 175, 55, 0); }
+}
+
+/* ── Pass Turn button ── */
+.pass-turn-btn {
+  margin: var(--space-xs) 0;
+  font-size: 0.85rem !important;
+  font-weight: 700;
+  animation: pass-turn-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes pass-turn-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(212, 175, 55, 0.2); }
+  50% { box-shadow: 0 0 15px rgba(212, 175, 55, 0.5); }
+}
+
+/* ── Health bar ── */
+.health-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(15, 14, 13, 0.6);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: var(--space-xs);
+  border: 1px solid rgba(58, 54, 51, 0.4);
+}
+
+.health-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2ecc71, #27ae60);
+  border-radius: 99px;
+  transition: width 0.4s ease, background 0.3s ease;
+}
+
+.health-bar-fill.health-low {
+  background: linear-gradient(90deg, #f39c12, #e67e22);
+}
+
+.health-bar-fill.health-critical {
+  background: linear-gradient(90deg, #c0392b, #e74c3c);
+}
+
+/* ── Health flash animation ── */
+.stat-health.flash-up .health-number {
+  animation: flash-green 0.6s ease;
+}
+
+.stat-health.flash-down .health-number {
+  animation: flash-red 0.6s ease;
+}
+
+@keyframes flash-green {
+  0% { color: #2ecc71; transform: scale(1.15); text-shadow: 0 0 20px rgba(46, 204, 113, 0.6); }
+  100% { transform: scale(1); }
+}
+
+@keyframes flash-red {
+  0% { color: #e74c3c; transform: scale(1.15); text-shadow: 0 0 20px rgba(231, 76, 60, 0.6); }
+  100% { transform: scale(1); }
+}
+
+/* ── Quick damage heal button ── */
+.quick-dmg-heal {
+  color: #2ecc71 !important;
+  border-color: rgba(46, 204, 113, 0.3) !important;
+}
+
+.quick-dmg-heal:hover:not(:disabled) {
+  border-color: #2ecc71 !important;
+  background: rgba(46, 204, 113, 0.15) !important;
+}
+
+/* ── Progress bars (poison, commander damage) ── */
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(15, 14, 13, 0.6);
+  border-radius: 99px;
+  overflow: hidden;
+  border: 1px solid rgba(58, 54, 51, 0.4);
+  flex: 1;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease, background 0.3s ease;
+  background: var(--color-primary);
+}
+
+.progress-poison {
+  background: linear-gradient(90deg, #8e44ad, #9b59b6);
+}
+
+.progress-danger {
+  background: linear-gradient(90deg, #c0392b, #e74c3c) !important;
+  animation: progress-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+/* ── Stat bar rows (poison, cmd damage) ── */
+.stat-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0.2rem 0;
+}
+
+.stat-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-bar-controls {
+  display: flex;
+  gap: var(--space-xs);
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.stat-bar-controls button {
+  width: 28px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+  background: rgba(43, 40, 37, 0.8);
+  color: var(--color-text);
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-bar-controls button:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: rgba(212, 175, 55, 0.1);
+}
+
+.stat-bar-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Commander damage bar rows ── */
+.cmd-dmg-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0.2rem 0;
+}
+
+.cmd-dmg-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Eliminated overlay ── */
+.eliminated-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  pointer-events: none;
+}
+
+.eliminated-icon {
+  font-size: 2.5rem;
+  filter: grayscale(0.3);
+}
+
+.eliminated-text {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--color-danger);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.eliminated-placement {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--color-primary);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* ── Event log enhancements ── */
+.event-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.event-icon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.event-item.event-danger {
+  border-left-color: var(--color-danger);
+  background: rgba(196, 69, 58, 0.08);
+}
+
+.event-item.event-damage {
+  border-left-color: #e67e22;
+}
+
+.event-item.event-heal {
+  border-left-color: #2ecc71;
+}
+
+.event-item.event-poison {
+  border-left-color: #9b59b6;
+}
+
+/* ── Host menu dropdown ── */
+.host-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-xs);
+  z-index: 20;
+  min-width: 140px;
+}
+
+.host-menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+
+.host-menu-item:hover {
+  background: var(--color-bg-input);
+}
+
+/* ── Badge variants ── */
+.badge-host {
+  background: var(--color-primary);
+  color: #1a1816;
+}
+
+.badge-commander {
+  background: rgba(212, 175, 55, 0.2);
+  color: var(--color-primary);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  font-size: 0.6rem;
+  padding: 0.1rem 0.3rem;
+}
+
+.badge-legal {
+  background: rgba(46, 204, 113, 0.15);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.badge-banned {
+  background: rgba(196, 69, 58, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(196, 69, 58, 0.3);
+}
+
+/* ── Button outline variants ── */
+.btn-danger-outline {
+  border-color: rgba(196, 69, 58, 0.4);
+  color: var(--color-danger);
+}
+
+.btn-danger-outline:hover {
+  border-color: var(--color-danger);
+  background: rgba(196, 69, 58, 0.1);
+}
+
+.btn-accent-outline {
+  border-color: rgba(46, 204, 113, 0.4);
+  color: #2ecc71;
+}
+
+.btn-accent-outline:hover {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.1);
+}
+
+/* ── Card face block (double-faced cards) ── */
+.card-face-block {
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.card-face-block:last-child {
+  border-bottom: none;
+}
+
+.card-face-name {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.15rem;
+}
+
+/* ── Flex utility ── */
+.items-center {
+  align-items: center;
+}
+
+.gap-sm {
+  gap: var(--space-sm);
+}
+
+.gap-xs {
+  gap: var(--space-xs);
+}
+
 .setup-code {
   background: var(--color-bg);
   border: 1px solid var(--color-border);

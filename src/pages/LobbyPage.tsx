@@ -104,6 +104,7 @@ export default function LobbyPage() {
     return getDisplayName(a).localeCompare(getDisplayName(b));
   });
 
+  const readyCount = players.filter((p) => p.isReady).length;
   const allReady = players.length >= 2 && players.every((p) => p.isReady);
   const turnOrder = computeTurnOrder(players);
   const anyRolled = players.some((p) => p.diceRoll != null);
@@ -143,7 +144,7 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ maxWidth: 640 }}>
       <div className="flex justify-between items-center mb-lg">
         <div>
           <Link to="/" className="btn btn-outline btn-sm">← Leave</Link>
@@ -154,7 +155,7 @@ export default function LobbyPage() {
 
       {error && <p className="form-error text-center mb-md">{error}</p>}
 
-      {/* Invite section */}
+      {/* 1. Game Code */}
       <div className="card mb-lg">
         <div className="flex justify-between items-center" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           <div>
@@ -172,84 +173,100 @@ export default function LobbyPage() {
         </div>
       </div>
 
-      <div className="grid grid-2">
-        {/* Player list — dynamically ordered by dice roll, animated */}
-        <div>
-          <div className="flex justify-between items-center mb-md">
-            <h3 style={{ margin: 0 }}>
-              Players ({players.length}/{session.maxPlayers})
-            </h3>
-            {anyRolled && (
-              <span className="text-muted" style={{ fontSize: '0.8rem' }}>
-                Sorted by roll ↓
-              </span>
-            )}
-          </div>
-          {/* framer-motion layout animations for smooth reordering */}
-          <div className="flex flex-col gap-sm">
-            <AnimatePresence mode="popLayout">
-              {sortedPlayers.map((p, idx) => (
-                <motion.div
-                  key={p.uid}
-                  layout
-                  layoutId={`player-${p.uid}`}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{
-                    layout: { type: 'spring', stiffness: 400, damping: 35 },
-                    duration: 0.2,
-                  }}
-                >
-                  <PlayerRow player={p} rank={p.diceRoll != null ? idx + 1 : null} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-            {players.length < session.maxPlayers && (
-              <div className="card text-center text-muted" style={{ padding: '1rem', borderStyle: 'dashed' }}>
-                Waiting for more players to join…
-              </div>
-            )}
-          </div>
+      {/* 2. Your Setup (commander + decklist) */}
+      {me && (
+        <MySetupPanel
+          sessionId={sessionId!}
+          player={me}
+        />
+      )}
 
-          {/* Turn order preview */}
-          {turnOrder.length > 1 && (
-            <div className="mt-md">
-              <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                Turn Order:
-              </p>
-              <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
-                {turnOrder.map((uid, i) => {
-                  const p = players.find((pl) => pl.uid === uid);
-                  return p ? (
-                    <span key={uid} className="turn-badge">
-                      {i + 1}. {getDisplayName(p)}
-                    </span>
-                  ) : null;
-                })}
-              </div>
+      {/* 3. Roll for Turn Order */}
+      {me && (
+        <DiceRollSection sessionId={sessionId!} uid={me.uid} diceRoll={me.diceRoll ?? null} />
+      )}
+
+      {/* 4. Mark As Ready (only clickable when roll is done) */}
+      {me && (
+        <ReadySection
+          sessionId={sessionId!}
+          uid={me.uid}
+          isReady={me.isReady}
+          hasRolled={me.diceRoll != null}
+        />
+      )}
+
+      {/* 5. Players */}
+      <div className="mb-lg">
+        <div className="flex justify-between items-center mb-md">
+          <h3 style={{ margin: 0 }}>
+            Players ({players.length}/{session.maxPlayers})
+          </h3>
+          {anyRolled && (
+            <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+              Sorted by roll ↓
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-sm">
+          <AnimatePresence mode="popLayout">
+            {sortedPlayers.map((p, idx) => (
+              <motion.div
+                key={p.uid}
+                layout
+                layoutId={`player-${p.uid}`}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{
+                  layout: { type: 'spring', stiffness: 400, damping: 35 },
+                  duration: 0.2,
+                }}
+              >
+                <PlayerRow player={p} rank={p.diceRoll != null ? idx + 1 : null} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {players.length < session.maxPlayers && (
+            <div className="card text-center text-muted" style={{ padding: '1rem', borderStyle: 'dashed' }}>
+              Waiting for more players to join…
             </div>
           )}
         </div>
 
-        {/* My setup */}
-        <div>
-          {me && (
-            <MySetupPanel
-              sessionId={sessionId!}
-              player={me}
-            />
-          )}
-        </div>
+        {/* Turn order preview */}
+        {turnOrder.length > 1 && (
+          <div className="mt-md">
+            <p className="text-muted" style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+              Turn Order:
+            </p>
+            <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
+              {turnOrder.map((uid, i) => {
+                const p = players.find((pl) => pl.uid === uid);
+                return p ? (
+                  <span key={uid} className="turn-badge">
+                    {i + 1}. {getDisplayName(p)}
+                  </span>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Host controls: reset rolls + start game */}
+      {/* 6. Game Launchers (host only) */}
       {isHost && (
         <div className="card mt-lg text-center">
+          <div className="flex justify-between items-center mb-md">
+            <h3 style={{ margin: 0 }}>Launch Game</h3>
+            <span className={`badge ${allReady ? 'badge-ready' : 'badge-loss'}`} style={allReady ? {} : { background: 'var(--color-danger)', color: '#fff' }}>
+              {readyCount}/{players.length} ready
+            </span>
+          </div>
           {anyRolled && (
             <button
               onClick={handleResetRolls}
-              className="btn btn-outline btn-sm mb-md"
+              className="btn btn-outline btn-sm"
               disabled={resetting}
               style={{ marginBottom: '1rem' }}
             >
@@ -495,7 +512,7 @@ function CommanderPicker({
 }
 
 /* ============================================================
- * My Setup Panel
+ * My Setup Panel (Commander + Decklist only)
  * ============================================================ */
 
 function MySetupPanel({
@@ -510,8 +527,6 @@ function MySetupPanel({
   const [decklistText, setDecklistText] = useState('');
   const [archidektUrl, setArchidektUrl] = useState('');
   const [importing, setImporting] = useState(false);
-  const [rolling, setRolling] = useState(false);
-  const [togglingReady, setTogglingReady] = useState(false);
   const [importError, setImportError] = useState('');
 
   const uid = user!.uid;
@@ -559,29 +574,11 @@ function MySetupPanel({
     await setPlayerDecklist(sessionId, uid, null, null, null);
   }
 
-  async function handleRoll() {
-    setRolling(true);
-    try {
-      await rollDice(sessionId, uid);
-    } finally {
-      setRolling(false);
-    }
-  }
-
-  async function handleToggleReady() {
-    setTogglingReady(true);
-    try {
-      await setPlayerReady(sessionId, uid, !player.isReady);
-    } finally {
-      setTogglingReady(false);
-    }
-  }
-
   return (
-    <div className="card">
+    <div className="card mb-lg">
       <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
 
-      {/* Commander — new visual picker */}
+      {/* Commander — visual picker */}
       <div className="form-group">
         <label className="form-label">Your Commander</label>
         <CommanderPicker
@@ -634,7 +631,11 @@ function MySetupPanel({
                 Import Text
               </button>
               <button onClick={handleImportArchidekt} className="btn btn-primary btn-sm" disabled={importing || !archidektUrl.trim()}>
-                Import URL
+                {importing ? (
+                  <span className="flex items-center gap-sm">
+                    <span className="spinner spinner-sm" /> Importing…
+                  </span>
+                ) : 'Import URL'}
               </button>
               <button onClick={() => setShowDeckImport(false)} className="btn btn-outline btn-sm">Cancel</button>
             </div>
@@ -645,36 +646,95 @@ function MySetupPanel({
           </button>
         )}
       </div>
+    </div>
+  );
+}
 
-      {/* Dice roll — single roll, no re-roll button */}
-      <div className="divider" />
-      <div className="form-group text-center">
-        <label className="form-label">Roll for Turn Order</label>
-        {player.diceRoll != null ? (
-          <div>
-            <p style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--color-accent)', lineHeight: 1 }}>
-              {player.diceRoll}
-            </p>
-            <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
-              You rolled a {player.diceRoll}. Ask the host to reset if needed.
-            </p>
-          </div>
-        ) : (
-          <button onClick={handleRoll} className="btn btn-accent btn-lg" disabled={rolling}>
-            {rolling ? 'Rolling…' : '🎲 Roll D20'}
-          </button>
-        )}
-      </div>
+/* ============================================================
+ * Dice Roll Section (separate from setup)
+ * ============================================================ */
 
-      {/* Ready */}
-      <div className="divider" />
+function DiceRollSection({
+  sessionId,
+  uid,
+  diceRoll,
+}: {
+  sessionId: string;
+  uid: string;
+  diceRoll: number | null;
+}) {
+  const [rolling, setRolling] = useState(false);
+
+  async function handleRoll() {
+    setRolling(true);
+    try {
+      await rollDice(sessionId, uid);
+    } finally {
+      setRolling(false);
+    }
+  }
+
+  return (
+    <div className="card mb-lg text-center">
+      <label className="form-label">Roll for Turn Order</label>
+      {diceRoll != null ? (
+        <div>
+          <p style={{ fontSize: '3rem', fontWeight: 800, color: 'var(--color-accent)', lineHeight: 1 }}>
+            {diceRoll}
+          </p>
+          <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            You rolled a {diceRoll}. Ask the host to reset if needed.
+          </p>
+        </div>
+      ) : (
+        <button onClick={handleRoll} className="btn btn-accent btn-lg" disabled={rolling}>
+          {rolling ? 'Rolling…' : '🎲 Roll D20'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+ * Ready Section (only clickable after dice roll)
+ * ============================================================ */
+
+function ReadySection({
+  sessionId,
+  uid,
+  isReady,
+  hasRolled,
+}: {
+  sessionId: string;
+  uid: string;
+  isReady: boolean;
+  hasRolled: boolean;
+}) {
+  const [toggling, setToggling] = useState(false);
+
+  async function handleToggleReady() {
+    setToggling(true);
+    try {
+      await setPlayerReady(sessionId, uid, !isReady);
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  return (
+    <div className="card mb-lg">
       <button
         onClick={handleToggleReady}
-        className={`btn btn-lg btn-block ${player.isReady ? 'btn-primary' : 'btn-outline'}`}
-        disabled={togglingReady}
+        className={`btn btn-lg btn-block ${isReady ? 'btn-primary' : 'btn-outline'}`}
+        disabled={toggling || !hasRolled}
       >
-        {player.isReady ? '✓ Ready' : 'Mark as Ready'}
+        {isReady ? '✓ Ready' : 'Mark as Ready'}
       </button>
+      {!hasRolled && (
+        <p className="text-muted text-center mt-sm" style={{ fontSize: '0.8rem' }}>
+          Roll the dice first to enable ready.
+        </p>
+      )}
     </div>
   );
 }
