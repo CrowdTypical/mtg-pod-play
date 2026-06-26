@@ -176,7 +176,7 @@ export default function LobbyPage() {
         {/* LEFT: Your Setup (merged: commander + decklist + dice roll + ready) */}
         <div className="lobby-col-left">
           {me && (
-            <div className="card">
+            <div className="card lobby-setup-card">
               <h3 style={{ marginBottom: '1rem' }}>Your Setup</h3>
 
               {/* Commander + Decklist */}
@@ -860,27 +860,60 @@ function DiceRollInline({
   // Randomized bounce keyframes — regenerated each roll for variety
   const [bounceKey, setBounceKey] = useState(0);
 
-  // Generate a ricochet path: enter top-right → left wall → bottom → settle.
-  // Tray is 140×100, die is 64px → safe travel is ±38px X, ±18px Y.
-  // The entry point (top-right) is the first keyframe; framer-motion animates
-  // from `initial` (set to the same entry) through each waypoint in order.
-  function genBounces() {
-    const maxX = 36;
-    const maxY = 16;
+  // Refs to measure the actual card bounds so the die can fly across the
+  // entire "Your Setup" card and bounce against its real walls.
+  const trayRef = useRef<HTMLDivElement>(null);
 
-    // Path AFTER entry — the entry point itself is set via the `initial` prop
-    // (further off-screen top-right) so the die visibly sweeps INTO the tray.
-    // Sequence: left wall → bottom → small rebound → settle center.
+  // Compute the maximum X/Y travel (in px) from the tray center to the card
+  // edges. Falls back to generous defaults if measurement fails.
+  function getCardBounds() {
+    const tray = trayRef.current;
+    if (!tray) return { maxX: 170, maxY: 140 };
+    const card = tray.closest('.lobby-setup-card') as HTMLElement | null;
+    if (!card) return { maxX: 170, maxY: 140 };
+
+    const trayRect = tray.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+
+    // Tray center relative to card top-left
+    const trayCenterX = trayRect.left + trayRect.width / 2 - cardRect.left;
+    const trayCenterY = trayRect.top + trayRect.height / 2 - cardRect.top;
+
+    // Distance from tray center to each card edge, minus half the die (32px)
+    // and a small padding (8px) so the die stops just inside the wall.
+    const pad = 8;
+    const halfDie = 32;
+
+    return {
+      maxX: Math.max(50, trayCenterX - halfDie - pad), // distance to left wall
+      maxY: Math.max(50, trayCenterY - halfDie - pad), // distance to top wall
+      maxRightX: Math.max(50, cardRect.width - trayCenterX - halfDie - pad),
+      maxBottomY: Math.max(50, cardRect.height - trayCenterY - halfDie - pad),
+    };
+  }
+
+  // Generate a ricochet path that spans the ENTIRE card.
+  // Die enters from top-right corner, slams left wall, drops to bottom,
+  // small rebound, then settles at tray center.
+  function genBounces() {
+    const b = getCardBounds();
+    const leftX = -(b.maxX ?? 170);
+    const rightX = b.maxRightX ?? 170;
+    const topY = -(b.maxY ?? 140);
+    const bottomY = b.maxBottomY ?? 140;
+
     return [
-      { x: -maxX, y: maxY * 0.2 },          // 1. Left wall (hard impact)
-      { x: maxX * 0.3, y: maxY },            // 2. Bottom area
-      { x: -maxX * 0.15, y: -maxY * 0.3 },   // 3. Small rebound
-      { x: 0, y: 0 },                         // 4. Settle center
+      { x: leftX, y: topY * 0.1 },             // 1. Left wall (hard impact)
+      { x: rightX * 0.6, y: bottomY },          // 2. Bottom-right area
+      { x: leftX * 0.3, y: topY * 0.4 },        // 3. Rebound up-left
+      { x: 0, y: 0 },                           // 4. Settle center
     ];
   }
 
   const [bounces, setBounces] = useState(genBounces());
   const [rotations, setRotations] = useState<number[]>([]);
+  // Entry point for the die — starts off the top-right corner of the card
+  const [entryPos, setEntryPos] = useState({ x: 170, y: -140 });
 
   // Sync display number when diceRoll arrives from Firestore
   useEffect(() => {
@@ -907,7 +940,13 @@ function DiceRollInline({
 
   async function handleRoll() {
     // Generate new chaotic bounce path + 2D spin for this roll
-    setBounces(genBounces());
+    const newBounces = genBounces();
+    setBounces(newBounces);
+
+    // Set entry point to the top-right corner of the card (off-screen-ish)
+    const b = getCardBounds();
+    setEntryPos({ x: (b.maxRightX ?? 170) + 20, y: -((b.maxY ?? 140) + 20) });
+
     // Single cumulative spin value — many full turns, lands at random angle
     const spinTurns = 3 + Math.floor(Math.random() * 3); // 3–5 full turns
     const finalAngle = Math.random() * 360;
@@ -957,12 +996,12 @@ function DiceRollInline({
   return (
     <div className="lobby-dice-inline">
       {/* Dice Tray — bounded area where the die tumbles */}
-      <div className="dice-tray">
+      <div className="dice-tray" ref={trayRef}>
         {/* The D20 die — bounces around chaotically with squash & stretch */}
         <motion.div
           key={bounceKey}
           className="d20-die-wrapper"
-          initial={rolling ? { x: 55, y: -30 } : { x: 0, y: 0 }}
+          initial={rolling ? { x: entryPos.x, y: entryPos.y } : { x: 0, y: 0 }}
           animate={
             rolling
               ? { x: xKeys, y: yKeys }

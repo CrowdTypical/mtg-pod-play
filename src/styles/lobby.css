@@ -112,7 +112,14 @@
   line-height: 1;
 }
 
-/* --- Dice Tray (bounded rolling area) --- */
+/* Setup card establishes a positioning + clipping context so the die can
+   fly across all content but never escape the card itself. */
+.lobby-setup-card {
+  position: relative;
+  overflow: hidden;
+}
+
+/* --- Dice Tray (visual felt; die starts here and flies beyond it) --- */
 .dice-tray {
   position: relative;
   width: 140px;
@@ -127,7 +134,7 @@
   border-radius: var(--radius-md);
 }
 
-/* Shadow on the tray floor beneath the die */
+/* Shadow beneath the die — stays in the tray as a visual anchor */
 .dice-tray-shadow {
   position: absolute;
   bottom: 8px;
@@ -141,12 +148,15 @@
 }
 
 /* --- Visual D20 Die --- */
+/* In normal flow inside the tray; flies beyond tray bounds via transforms.
+   z-index ensures it renders on top of card text when flying over content. */
 .d20-die-wrapper {
   position: relative;
-  z-index: 2;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 .d20-die {
