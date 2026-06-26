@@ -973,22 +973,11 @@ function DiceRollInline({
     );
   }
 
-  // Build keyframe arrays for framer-motion
-  // 2D approach: flat die spins (rotate Z) + squash/stretch on bounces
+  // Build keyframe arrays for framer-motion.
+  // The die bounces along a ricochet path and spins (rotate Z) without
+  // changing shape.
   const xKeys = bounces.map((b) => b.x);
   const yKeys = bounces.map((b) => b.y);
-
-  // Squash/stretch: alternate between wide-short and narrow-tall
-  // at each bounce point to simulate impact deformation.
-  // Framer Motion needs separate arrays per property.
-  const scaleXKeys = bounces.map((_, i) => {
-    if (i === bounces.length - 1) return 1;
-    return i % 2 === 0 ? 1.2 : 0.85; // squash wide, then stretch narrow
-  });
-  const scaleYKeys = bounces.map((_, i) => {
-    if (i === bounces.length - 1) return 1;
-    return i % 2 === 0 ? 0.8 : 1.15; // inverse of scaleX
-  });
 
   const spinAngle = rotations[0] ?? 0;
 
@@ -996,7 +985,7 @@ function DiceRollInline({
     <div className="lobby-dice-inline">
       {/* Dice Tray — bounded area where the die tumbles */}
       <div className="dice-tray" ref={trayRef}>
-        {/* The D20 die — bounces around chaotically with squash & stretch */}
+        {/* The D20 die — bounces across the card and spins without morphing */}
         <motion.div
           key={bounceKey}
           className="d20-die-wrapper"
@@ -1031,21 +1020,9 @@ function DiceRollInline({
                 : { type: 'spring', stiffness: 400, damping: 15 }
             }
           >
-            <motion.div
-              className="d20-face"
-              animate={rolling ? { scaleX: scaleXKeys, scaleY: scaleYKeys } : { scaleX: 1, scaleY: 1 }}
-              transition={
-                rolling
-                  ? {
-                      duration: 1.8,
-                      times: scaleXKeys.map((_, i) => i / (scaleXKeys.length - 1)),
-                      ease: 'easeInOut',
-                    }
-                  : {}
-              }
-            >
+            <div className="d20-face">
               <span className="d20-number">{displayNum ?? '?'}</span>
-            </motion.div>
+            </div>
           </motion.div>
         </motion.div>
 
