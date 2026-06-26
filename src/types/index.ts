@@ -137,6 +137,8 @@ export interface SessionPlayer {
 
   // Dice roll for turn order
   diceRoll?: number | null;
+  /** How many "nudge" rerolls the player has used (max 3). */
+  nudgesUsed?: number | null;
 
   // In-match state
   health: number;

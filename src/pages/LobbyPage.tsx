@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import {
   clearMyDiceRoll,
   computeTurnOrder,
+  MAX_NUDGES,
+  nudgeDice,
   resetDiceRolls,
   rollDice,
   setPlayerBracket,
@@ -193,6 +195,7 @@ export default function LobbyPage() {
                   sessionId={sessionId!}
                   uid={me.uid}
                   diceRoll={me.diceRoll ?? null}
+                  nudgesUsed={me.nudgesUsed ?? 0}
                 />
               </div>
 
@@ -385,18 +388,8 @@ function PlayerRow({
                   </p>
                 </div>
               )}
-              <div className="text-center">
-                <p className="text-muted" style={{ fontSize: '0.7rem', marginBottom: 0 }}>D20</p>
-                <p
-                  style={{
-                    fontSize: '2rem',
-                    fontWeight: 800,
-                    color: 'var(--color-accent)',
-                    lineHeight: 1,
-                  }}
-                >
-                  {player.diceRoll}
-                </p>
+              <div className="d20-rank" title={`D20 Roll: ${player.diceRoll}`}>
+                <span className="d20-rank-number">{player.diceRoll}</span>
               </div>
             </>
           )}
@@ -850,12 +843,15 @@ function DiceRollInline({
   sessionId,
   uid,
   diceRoll,
+  nudgesUsed,
 }: {
   sessionId: string;
   uid: string;
   diceRoll: number | null;
+  nudgesUsed: number;
 }) {
   const [rolling, setRolling] = useState(false);
+  const [nudging, setNudging] = useState(false);
   const [displayNum, setDisplayNum] = useState<number | null>(null);
   // Randomized bounce keyframes — regenerated each roll for variety
   const [bounceKey, setBounceKey] = useState(0);
@@ -962,6 +958,30 @@ function DiceRollInline({
     }, 1800);
   }
 
+  async function handleNudge() {
+    const remaining = MAX_NUDGES - nudgesUsed;
+    if (remaining <= 0 || nudging) return;
+
+    // Quick spin animation for the nudge
+    const spinTurns = 1 + Math.floor(Math.random() * 2);
+    const currentRot = rotations[rotations.length - 1] ?? 0;
+    setRotations([currentRot + spinTurns * 360 + Math.random() * 360]);
+    setBounceKey((k) => k + 1);
+    setNudging(true);
+    setDisplayNum(Math.floor(Math.random() * 20) + 1);
+
+    // Short delay for the spin animation, then write to Firestore
+    setTimeout(async () => {
+      try {
+        await nudgeDice(sessionId, uid);
+      } catch {
+        // Ignore — Firestore will sync the actual value
+      } finally {
+        setNudging(false);
+      }
+    }, 800);
+  }
+
   // Initial state: show the roll button
   if (diceRoll == null && !rolling) {
     return (
@@ -1010,14 +1030,16 @@ function DiceRollInline({
           <motion.div
             className="d20-die"
             animate={
-              rolling
+              rolling || nudging
                 ? { rotate: spinAngle }
                 : { rotate: 0 }
             }
             transition={
               rolling
                 ? { duration: 1.8, ease: [0.25, 0.1, 0.25, 1] }
-                : { type: 'spring', stiffness: 400, damping: 15 }
+                : nudging
+                  ? { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }
+                  : { type: 'spring', stiffness: 400, damping: 15 }
             }
           >
             <div className="d20-face">
@@ -1038,16 +1060,31 @@ function DiceRollInline({
         />
       </div>
 
-      {rolling && (
+      {(rolling || nudging) && (
         <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-          Rolling…
+          {nudging ? 'Nudging…' : 'Rolling…'}
         </p>
       )}
 
-      {!rolling && displayNum != null && (
-        <p className="text-muted" style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
-          You rolled a {displayNum}. Ask the host to reset if needed.
-        </p>
+      {!rolling && !nudging && displayNum != null && (
+        <div className="dice-nudge-section">
+          <p className="text-muted" style={{ fontSize: '0.8rem', margin: 0 }}>
+            You rolled a {displayNum}.
+          </p>
+          {nudgesUsed < MAX_NUDGES ? (
+            <button
+              onClick={handleNudge}
+              className="btn btn-outline btn-sm"
+              disabled={nudging}
+            >
+              🤏 Nudge ({MAX_NUDGES - nudgesUsed} left)
+            </button>
+          ) : (
+            <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+              No nudges remaining — ask host to reset
+            </span>
+          )}
+        </div>
       )}
     </div>
   );

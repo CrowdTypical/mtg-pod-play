@@ -312,7 +312,10 @@ export async function updatePlayerNickname(
 
 export async function rollDice(sessionId: string, uid: string): Promise<number> {
   const roll = Math.floor(Math.random() * 20) + 1; // D20: 1–20
-  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), { diceRoll: roll });
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
+    diceRoll: roll,
+    nudgesUsed: 0,
+  });
   await addEvent(sessionId, {
     type: 'dice_rolled',
     uid,
@@ -322,11 +325,39 @@ export async function rollDice(sessionId: string, uid: string): Promise<number> 
 }
 
 /**
+ * "Nudge" reroll — allows a player to re-roll their D20 up to MAX_NUDGES times.
+ * Increments the nudgesUsed counter and writes a new random roll.
+ */
+export const MAX_NUDGES = 3;
+
+export async function nudgeDice(sessionId: string, uid: string): Promise<number> {
+  const roll = Math.floor(Math.random() * 20) + 1;
+  const playerSnap = await getDoc(doc(db, 'sessions', sessionId, 'players', uid));
+  if (!playerSnap.exists()) throw new Error('Player not found');
+  const current = (playerSnap.data() as SessionPlayer).nudgesUsed ?? 0;
+  if (current >= MAX_NUDGES) throw new Error('No nudges remaining');
+
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
+    diceRoll: roll,
+    nudgesUsed: current + 1,
+  });
+  await addEvent(sessionId, {
+    type: 'dice_rolled',
+    uid,
+    message: `nudged and rolled a ${roll}.`,
+  });
+  return roll;
+}
+
+/**
  * Clear a single player's dice roll. Called by each client when the host
  * increments the session-level diceResetCount signal.
  */
 export async function clearMyDiceRoll(sessionId: string, uid: string): Promise<void> {
-  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), { diceRoll: null });
+  await updateDoc(doc(db, 'sessions', sessionId, 'players', uid), {
+    diceRoll: null,
+    nudgesUsed: 0,
+  });
 }
 
 /**
@@ -351,6 +382,7 @@ export async function resetDiceRolls(sessionId: string): Promise<void> {
   const hostUid = session.hostUid;
   await updateDoc(doc(db, 'sessions', sessionId, 'players', hostUid), {
     diceRoll: null,
+    nudgesUsed: 0,
   });
 
   await addEvent(sessionId, {
